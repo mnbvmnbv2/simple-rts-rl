@@ -1,0 +1,13 @@
+[project]
+name = "simple-rts-rl"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "chex>=0.1.89",
+    "flax>=0.10.3",
+    "jax>=0.5.1",
+    "jupyterlab>=4.3.5",
+    "matplotlib>=3.10.0",
+]
