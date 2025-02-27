@@ -1,6 +1,7 @@
 import chex
 import jax.numpy as jnp
 
+from src.rts.config import EnvConfig
 from src.rts.env import EnvState
 
 
@@ -17,9 +18,9 @@ def get_legal_moves(state: EnvState, player: int) -> jnp.ndarray:
     return legal_moves
 
 
-def assert_valid_state(state: EnvState) -> None:
+def assert_valid_state(params: EnvConfig, state: EnvState) -> None:
     # Check that the board is of the right shape
-    chex.assert_shape(state.board, (10, 10, 4))
+    chex.assert_shape(state.board, (params.board_width, params.board_height, 4))
     # Check that the number of troops and bases are integers
     chex.assert_type(state.board, jnp.integer)
     # Check that all values are non-negative.
