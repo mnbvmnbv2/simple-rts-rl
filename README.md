@@ -1,5 +1,8 @@
 # simple-rts-rl
 
+
+## Build docs
+
 `rd -r build | uv run sphinx-build -b html ./source ./build | uv run python -m http.server -d build`
 
 or
