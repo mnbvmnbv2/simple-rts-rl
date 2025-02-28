@@ -21,5 +21,5 @@ def rng_key():
     return jax.random.PRNGKey(0)
 
 
-def test_move_benchmark(benchmark, rng_key, params):
+def test_init_benchmark(benchmark, rng_key, params):
     benchmark(init_state, rng_key, params)
