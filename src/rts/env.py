@@ -6,17 +6,40 @@ from src.rts.config import EnvConfig
 
 
 @struct.dataclass
+class Board:
+    player_1_troops: jnp.ndarray  # shape: (width, height) of int
+    player_2_troops: jnp.ndarray  # shape: (width, height) of int
+    neutral_troops: jnp.ndarray  # shape: (width, height) of int
+    bases: jnp.ndarray  # shape: (width, height) of bool
+
+    @property
+    def width(self) -> int:
+        return self.player_1_troops.shape[0]
+
+    @property
+    def height(self) -> int:
+        return self.player_1_troops.shape[1]
+
+
+@struct.dataclass
 class EnvState:
-    board: jnp.ndarray
+    board: Board
     time: int = 5
 
 
 def move(state: EnvState, player: int, x: int, y: int, action: int) -> EnvState:
     board = state.board
-    if board.shape[0] <= x or board.shape[1] <= y:
+    if board.width <= x or board.height <= y:
         return state
-    if board[y, x, player] < 2:
+
+    if player == 0:
+        troops = board.player_1_troops
+    else:
+        troops = board.player_2_troops
+
+    if troops[y, x] < 2:
         return state
+
     target_x, target_y = x, y
     if action == 0:
         target_y = y - 1
@@ -28,40 +51,47 @@ def move(state: EnvState, player: int, x: int, y: int, action: int) -> EnvState:
         target_x = x - 1
 
     # Check if the target is within bounds
-    within_x = target_x >= 0 and target_x < board.shape[1]
-    within_y = target_y >= 0 and target_y < board.shape[0]
-    if not within_x or not within_y:
+    if (
+        target_x < 0
+        or target_y < 0
+        or target_x >= board.width
+        or target_y >= board.height
+    ):
         return state
 
-    # Check if the target has opponent troops
-    if board[target_y, target_x, (player + 1) % 2] > 0:
-        target_troops = board[target_y, target_x, (player + 1) % 2]
-        opponent = (player + 1) % 2
+    if player == 0:
+        opponent_troops = board.player_2_troops
+    else:
+        opponent_troops = board.player_1_troops
+
+    # Check if the target
+    # has other player's troops
+    if opponent_troops[target_y, target_x] > 0:
+        target_troops = opponent_troops[target_y, target_x]
     # Check if the target has neutral troops
-    elif board[target_y, target_x, 2] > 0:
-        target_troops = board[target_y, target_x, 2 % 2]
-        opponent = 2
+    elif board.neutral_troops[target_y, target_x] > 0:
+        target_troops = board.neutral_troops[target_y, target_x]
+        opponent_troops = board.neutral_troops
     else:
         target_troops = 0
-        opponent = None
 
-    sorce_troops = board[y, x, player]
-    if opponent is None:
-        board = board.at[target_y, target_x, player].set(
-            board[y, x, player] - 1 + board[target_y, target_x, player]
+    sorce_troops = troops[y, x] - 1
+    if target_troops == 0:
+        board = troops.at[target_y, target_x].set(
+            troops[y, x] - 1 + troops[target_y, target_x]
         )
-        board = board.at[y, x, player].set(1)
+        board = troops.at[y, x].set(1)
     elif target_troops > sorce_troops:
-        board = board.at[target_y, target_x, opponent].set(
+        board = opponent_troops.at[target_y, target_x].set(
             target_troops - sorce_troops + 1
         )
-        board = board.at[y, x, player].set(1)
+        board = troops.at[y, x].set(1)
     else:
-        board = board.at[target_y, target_x, opponent].set(0)
-        board = board.at[y, x, player].set(sorce_troops - target_troops)
-        if board[y, x, player] > 1:
-            board = board.at[target_y, target_x, player].set(board[y, x, player] - 1)
-            board = board.at[y, x, player].set(1)
+        board = opponent_troops.at[target_y, target_x].set(0)
+        board = troops.at[y, x].set(sorce_troops - target_troops)
+        if troops[y, x] > 1:
+            board = troops.at[target_y, target_x].set(troops[y, x] - 1)
+            board = troops.at[y, x].set(1)
 
     return EnvState(board=board, time=state.time)
 
@@ -134,15 +164,17 @@ def increase_troops(state: EnvState) -> EnvState:
     # We only increase troops for player 1 and player 2
     board = state.board
     bonus_troops = state.time == 0
-    for i in range(board.shape[0]):
-        for j in range(board.shape[1]):
-            for k in range(2):
+    for i in range(board.width):
+        for j in range(board.height):
+            for troops_board in [board.player_1_troops, board.player_2_troops]:
                 # Increase troops for all places with troops if bonus troops
-                if board[i, j, k] > 0:
-                    board = board.at[i, j, k].set(board[i, j, k] + bonus_troops)
+                if troops_board[i, j] > 0:
+                    troops_board = troops_board.at[i, j].set(
+                        troops_board[i, j] + bonus_troops
+                    )
                     # Increse troops for all bases
-                    if board[i, j, 3] > 0:
-                        board = board.at[i, j, k].set(board[i, j, k] + 1)
+                    if troops_board[i, j, 3] > 0:
+                        troops_board = troops_board.at[i, j].set(troops_board[i, j] + 1)
     # Decrese time and increase to 10 if bonus troops
     time = state.time - 1 + bonus_troops * 10
     return EnvState(board=board, time=time)

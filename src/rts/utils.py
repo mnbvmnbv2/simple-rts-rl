@@ -19,24 +19,31 @@ def get_legal_moves(state: EnvState, player: int) -> jnp.ndarray:
 
 
 def assert_valid_state(state: EnvState) -> None:
-    # Check that the number of troops and bases are integers
-    chex.assert_type(state.board, jnp.integer)
+    board = state.board
+    # Check types
+    chex.assert_type(board.player_1_troops, jnp.integer)
+    chex.assert_type(board.player_2_troops, jnp.integer)
+    chex.assert_type(board.neutral_troops, jnp.integer)
+    chex.assert_type(board.neutral_troops, jnp.bool)
+
     # Check that all values are non-negative.
-    assert jnp.all(state.board >= 0), "Board has negative values."
+    assert jnp.all(board.player_1_troops >= 0), "Negative player 1 troops"
+    assert jnp.all(board.player_2_troops >= 0), "Negative player 2 troops"
+    assert jnp.all(board.neutral_troops >= 0), "Negative neutral troops"
 
     # For tiles that are bases, ensure at least one troop.
-    base_valid = jnp.where(
-        state.board[..., 3] == 1, jnp.sum(state.board[..., :3]) > 0, True
-    )
-    assert jnp.all(base_valid), "Some bases do not have any troops."
-
-    # Check that no tile has multiple bases (channel 3 at most 1).
-    no_multiple_bases = state.board[..., 3] <= 1
-    assert jnp.all(no_multiple_bases), "Some tiles have multiple bases."
+    total_troops = board.player_1_troops + board.player_2_troops + board.neutral_troops
+    assert jnp.all(
+        jnp.where(board.bases, total_troops > 0, True)
+    ), "Some bases do not have any troops."
 
     # Check that no tile has troops from multiple players (only one channel from 0 to 2 can be over 0).
-    no_multiple_troops = jnp.sum(state.board[..., :3] > 0, axis=-1) <= 1
-    assert jnp.all(no_multiple_troops), "Some tiles have troops from multiple players."
+    troop_presence = (
+        (board.player_1_troops > 0).astype(jnp.int32)
+        + (board.player_2_troops > 0).astype(jnp.int32)
+        + (board.neutral_troops > 0).astype(jnp.int32)
+    )
+    assert jnp.all(troop_presence <= 1), "Some tiles have troops from multiple players."
 
     # Check time is not negative.
     assert state.time >= 0, "Time is negative."
