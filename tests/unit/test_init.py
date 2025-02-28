@@ -47,4 +47,4 @@ def test_init_state(params):
     for i in range(100):
         init_rng = jax.random.PRNGKey(i)
         state = init_state(init_rng, params)
-        assert_valid_state(params, state)
+        assert_valid_state(state)

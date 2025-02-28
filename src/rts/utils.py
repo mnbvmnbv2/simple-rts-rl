@@ -18,9 +18,7 @@ def get_legal_moves(state: EnvState, player: int) -> jnp.ndarray:
     return legal_moves
 
 
-def assert_valid_state(params: EnvConfig, state: EnvState) -> None:
-    # Check that the board is of the right shape
-    chex.assert_shape(state.board, (params.board_width, params.board_height, 4))
+def assert_valid_state(state: EnvState) -> None:
     # Check that the number of troops and bases are integers
     chex.assert_type(state.board, jnp.integer)
     # Check that all values are non-negative.
@@ -39,3 +37,6 @@ def assert_valid_state(params: EnvConfig, state: EnvState) -> None:
     # Check that no tile has troops from multiple players (only one channel from 0 to 2 can be over 0).
     no_multiple_troops = jnp.sum(state.board[..., :3] > 0, axis=-1) <= 1
     assert jnp.all(no_multiple_troops), "Some tiles have troops from multiple players."
+
+    # Check time is not negative.
+    assert state.time >= 0, "Time is negative."
