@@ -170,10 +170,11 @@ def init_state(rng_key: jnp.ndarray, params: EnvConfig) -> EnvState:
     return EnvState(board=board)
 
 
+@jax.jit
 def increase_troops(state: EnvState) -> EnvState:
     # We only increase troops for player 1 and player 2
     board = state.board
-    bonus_troops = int(state.time == 0)
+    bonus_troops = (state.time == 0).astype(int)
 
     p1_troop_locations = board.player_1_troops > 0
     p2_troop_locations = board.player_2_troops > 0
