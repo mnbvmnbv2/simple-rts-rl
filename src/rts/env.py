@@ -77,21 +77,21 @@ def move(state: EnvState, player: int, x: int, y: int, action: int) -> EnvState:
 
     sorce_troops = troops[y, x] - 1
     if target_troops == 0:
-        board = troops.at[target_y, target_x].set(
+        troops = troops.at[target_y, target_x].set(
             troops[y, x] - 1 + troops[target_y, target_x]
         )
-        board = troops.at[y, x].set(1)
+        troops = troops.at[y, x].set(1)
     elif target_troops > sorce_troops:
-        board = opponent_troops.at[target_y, target_x].set(
+        opponent_troops = opponent_troops.at[target_y, target_x].set(
             target_troops - sorce_troops + 1
         )
-        board = troops.at[y, x].set(1)
+        troops = troops.at[y, x].set(1)
     else:
-        board = opponent_troops.at[target_y, target_x].set(0)
-        board = troops.at[y, x].set(sorce_troops - target_troops)
+        opponent_troops = opponent_troops.at[target_y, target_x].set(0)
+        troops = troops.at[y, x].set(sorce_troops - target_troops)
         if troops[y, x] > 1:
-            board = troops.at[target_y, target_x].set(troops[y, x] - 1)
-            board = troops.at[y, x].set(1)
+            troops = troops.at[target_y, target_x].set(troops[y, x] - 1)
+            troops = troops.at[y, x].set(1)
 
     return EnvState(board=board, time=state.time)
 
@@ -106,7 +106,10 @@ def init_state(rng_key: jnp.ndarray, params: EnvConfig) -> EnvState:
     width = params.board_width
     height = params.board_height
 
-    board = jnp.zeros((width, height, 4), dtype=jnp.int32)
+    player_1_troops = jnp.zeros((width, height), dtype=jnp.int32)
+    player_2_troops = jnp.zeros((width, height), dtype=jnp.int32)
+    neutral_troops = jnp.zeros((width, height), dtype=jnp.int32)
+    bases = jnp.zeros((width, height), dtype=jnp.bool_)
     # randomly select 2 start positions that should be unique
     pos1 = jax.random.randint(rng_key, (2,), 0, width)
     rng_key, _ = jax.random.split(rng_key)
@@ -116,11 +119,11 @@ def init_state(rng_key: jnp.ndarray, params: EnvConfig) -> EnvState:
         pos2 = jax.random.randint(rng_key, (2,), 0, width)
 
     # set p1 troop and base
-    board = board.at[pos1[0], pos1[1], 0].set(5)
-    board = board.at[pos1[0], pos1[1], 3].set(1)
+    player_1_troops = player_1_troops.at[pos1[0], pos1[1]].set(5)
+    bases = bases.at[pos1[0], pos1[1]].set(True)
     # set p2 troop and base
-    board = board.at[pos2[0], pos2[1], 1].set(5)
-    board = board.at[pos2[0], pos2[1], 3].set(1)
+    player_2_troops = player_2_troops.at[pos2[0], pos2[1]].set(5)
+    bases = bases.at[pos2[0], pos2[1]].set(True)
 
     # set random neutral bases
     for i in range(params.num_neutral_bases):
@@ -137,8 +140,8 @@ def init_state(rng_key: jnp.ndarray, params: EnvConfig) -> EnvState:
             params.neutral_bases_min_troops,
             params.neutral_bases_max_troops,
         )
-        board = board.at[pos[0], pos[1], 2].set(num_troops)
-        board = board.at[pos[0], pos[1], 3].set(1)
+        neutral_troops = neutral_troops.at[pos[0], pos[1]].set(num_troops)
+        bases = bases.at[pos[0], pos[1]].set(True)
 
     # set random neutral troops
     for i in range(params.num_neutral_troops_start):
@@ -155,7 +158,14 @@ def init_state(rng_key: jnp.ndarray, params: EnvConfig) -> EnvState:
             minval=params.neutral_bases_min_troops,
             maxval=params.neutral_bases_max_troops,
         )
-        board = board.at[pos[0], pos[1], 2].set(num_troops)
+        neutral_troops = neutral_troops.at[pos[0], pos[1]].set(num_troops)
+
+    board = Board(
+        player_1_troops=player_1_troops,
+        player_2_troops=player_2_troops,
+        neutral_troops=neutral_troops,
+        bases=bases,
+    )
 
     return EnvState(board=board)
 
@@ -163,18 +173,27 @@ def init_state(rng_key: jnp.ndarray, params: EnvConfig) -> EnvState:
 def increase_troops(state: EnvState) -> EnvState:
     # We only increase troops for player 1 and player 2
     board = state.board
-    bonus_troops = state.time == 0
-    for i in range(board.width):
-        for j in range(board.height):
-            for troops_board in [board.player_1_troops, board.player_2_troops]:
-                # Increase troops for all places with troops if bonus troops
-                if troops_board[i, j] > 0:
-                    troops_board = troops_board.at[i, j].set(
-                        troops_board[i, j] + bonus_troops
-                    )
-                    # Increse troops for all bases
-                    if troops_board[i, j, 3] > 0:
-                        troops_board = troops_board.at[i, j].set(troops_board[i, j] + 1)
+    bonus_troops = int(state.time == 0)
+
+    p1_troop_locations = board.player_1_troops > 0
+    p2_troop_locations = board.player_2_troops > 0
+    base_bonus = board.bases.astype(jnp.int32)
+
+    new_player_1 = (
+        board.player_1_troops
+        + bonus_troops * p1_troop_locations.astype(jnp.int32)
+        + base_bonus * p1_troop_locations.astype(jnp.int32)
+    )
+    new_player_2 = (
+        board.player_2_troops
+        + bonus_troops * p2_troop_locations.astype(jnp.int32)
+        + base_bonus * p2_troop_locations.astype(jnp.int32)
+    )
+
+    new_board = board.replace(
+        player_1_troops=new_player_1, player_2_troops=new_player_2
+    )
+
     # Decrese time and increase to 10 if bonus troops
     time = state.time - 1 + bonus_troops * 10
-    return EnvState(board=board, time=time)
+    return EnvState(board=new_board, time=time)

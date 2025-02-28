@@ -21,7 +21,9 @@ def test_blank_state(board: Board):
 
 
 def test_basic_board(board: Board):
-    board = board.player_1_troops.at[0, 0].set(1)
+    # because frozen
+    new_player_1_troops = board.player_1_troops.at[0, 0].set(1)
+    board = board.replace(player_1_troops=new_player_1_troops)
     state = EnvState(board=board, time=0)
     assert_valid_state(state)
 
@@ -33,7 +35,9 @@ def test_negative_time(board: Board):
 
 
 def test_negative_troops(board: Board):
-    board.player_1_troops = board.player_1_troops.at[0, 0].set(-1)
+    # because frozen
+    new_player_1_troops = board.player_1_troops.at[0, 0].set(-1)
+    board = board.replace(player_1_troops=new_player_1_troops)
     state = EnvState(board=board, time=0)
     with pytest.raises(AssertionError):
         assert_valid_state(state)

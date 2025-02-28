@@ -1,7 +1,6 @@
 import chex
 import jax.numpy as jnp
 
-from src.rts.config import EnvConfig
 from src.rts.env import EnvState
 
 
@@ -21,10 +20,10 @@ def get_legal_moves(state: EnvState, player: int) -> jnp.ndarray:
 def assert_valid_state(state: EnvState) -> None:
     board = state.board
     # Check types
-    chex.assert_type(board.player_1_troops, jnp.integer)
+    chex.assert_type(state.board.player_1_troops, jnp.integer)
     chex.assert_type(board.player_2_troops, jnp.integer)
     chex.assert_type(board.neutral_troops, jnp.integer)
-    chex.assert_type(board.neutral_troops, jnp.bool)
+    chex.assert_type(board.bases, jnp.bool)
 
     # Check that all values are non-negative.
     assert jnp.all(board.player_1_troops >= 0), "Negative player 1 troops"
