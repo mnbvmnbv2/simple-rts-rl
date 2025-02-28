@@ -6,17 +6,40 @@ from src.rts.config import EnvConfig
 
 
 @struct.dataclass
+class Board:
+    player_1_troops: jnp.ndarray  # shape: (width, height) of int
+    player_2_troops: jnp.ndarray  # shape: (width, height) of int
+    neutral_troops: jnp.ndarray  # shape: (width, height) of int
+    bases: jnp.ndarray  # shape: (width, height) of bool
+
+    @property
+    def width(self) -> int:
+        return self.player_1_troops.shape[0]
+
+    @property
+    def height(self) -> int:
+        return self.player_1_troops.shape[1]
+
+
+@struct.dataclass
 class EnvState:
-    board: jnp.ndarray
+    board: Board
     time: int = 5
 
 
 def move(state: EnvState, player: int, x: int, y: int, action: int) -> EnvState:
     board = state.board
-    if board.shape[0] <= x or board.shape[1] <= y:
+    if board.width <= x or board.height <= y:
         return state
-    if board[y, x, player] < 2:
+
+    if player == 0:
+        troops = board.player_1_troops
+    else:
+        troops = board.player_2_troops
+
+    if troops[y, x] < 2:
         return state
+
     target_x, target_y = x, y
     if action == 0:
         target_y = y - 1
@@ -28,40 +51,47 @@ def move(state: EnvState, player: int, x: int, y: int, action: int) -> EnvState:
         target_x = x - 1
 
     # Check if the target is within bounds
-    within_x = target_x >= 0 and target_x < board.shape[1]
-    within_y = target_y >= 0 and target_y < board.shape[0]
-    if not within_x or not within_y:
+    if (
+        target_x < 0
+        or target_y < 0
+        or target_x >= board.width
+        or target_y >= board.height
+    ):
         return state
 
-    # Check if the target has opponent troops
-    if board[target_y, target_x, (player + 1) % 2] > 0:
-        target_troops = board[target_y, target_x, (player + 1) % 2]
-        opponent = (player + 1) % 2
+    if player == 0:
+        opponent_troops = board.player_2_troops
+    else:
+        opponent_troops = board.player_1_troops
+
+    # Check if the target
+    # has other player's troops
+    if opponent_troops[target_y, target_x] > 0:
+        target_troops = opponent_troops[target_y, target_x]
     # Check if the target has neutral troops
-    elif board[target_y, target_x, 2] > 0:
-        target_troops = board[target_y, target_x, 2 % 2]
-        opponent = 2
+    elif board.neutral_troops[target_y, target_x] > 0:
+        target_troops = board.neutral_troops[target_y, target_x]
+        opponent_troops = board.neutral_troops
     else:
         target_troops = 0
-        opponent = None
 
-    sorce_troops = board[y, x, player]
-    if opponent is None:
-        board = board.at[target_y, target_x, player].set(
-            board[y, x, player] - 1 + board[target_y, target_x, player]
+    sorce_troops = troops[y, x] - 1
+    if target_troops == 0:
+        troops = troops.at[target_y, target_x].set(
+            troops[y, x] - 1 + troops[target_y, target_x]
         )
-        board = board.at[y, x, player].set(1)
+        troops = troops.at[y, x].set(1)
     elif target_troops > sorce_troops:
-        board = board.at[target_y, target_x, opponent].set(
+        opponent_troops = opponent_troops.at[target_y, target_x].set(
             target_troops - sorce_troops + 1
         )
-        board = board.at[y, x, player].set(1)
+        troops = troops.at[y, x].set(1)
     else:
-        board = board.at[target_y, target_x, opponent].set(0)
-        board = board.at[y, x, player].set(sorce_troops - target_troops)
-        if board[y, x, player] > 1:
-            board = board.at[target_y, target_x, player].set(board[y, x, player] - 1)
-            board = board.at[y, x, player].set(1)
+        opponent_troops = opponent_troops.at[target_y, target_x].set(0)
+        troops = troops.at[y, x].set(sorce_troops - target_troops)
+        if troops[y, x] > 1:
+            troops = troops.at[target_y, target_x].set(troops[y, x] - 1)
+            troops = troops.at[y, x].set(1)
 
     return EnvState(board=board, time=state.time)
 
@@ -76,7 +106,10 @@ def init_state(rng_key: jnp.ndarray, params: EnvConfig) -> EnvState:
     width = params.board_width
     height = params.board_height
 
-    board = jnp.zeros((width, height, 4), dtype=jnp.int32)
+    player_1_troops = jnp.zeros((width, height), dtype=jnp.int32)
+    player_2_troops = jnp.zeros((width, height), dtype=jnp.int32)
+    neutral_troops = jnp.zeros((width, height), dtype=jnp.int32)
+    bases = jnp.zeros((width, height), dtype=jnp.bool_)
     # randomly select 2 start positions that should be unique
     pos1 = jax.random.randint(rng_key, (2,), 0, width)
     rng_key, _ = jax.random.split(rng_key)
@@ -86,11 +119,11 @@ def init_state(rng_key: jnp.ndarray, params: EnvConfig) -> EnvState:
         pos2 = jax.random.randint(rng_key, (2,), 0, width)
 
     # set p1 troop and base
-    board = board.at[pos1[0], pos1[1], 0].set(5)
-    board = board.at[pos1[0], pos1[1], 3].set(1)
+    player_1_troops = player_1_troops.at[pos1[0], pos1[1]].set(5)
+    bases = bases.at[pos1[0], pos1[1]].set(True)
     # set p2 troop and base
-    board = board.at[pos2[0], pos2[1], 1].set(5)
-    board = board.at[pos2[0], pos2[1], 3].set(1)
+    player_2_troops = player_2_troops.at[pos2[0], pos2[1]].set(5)
+    bases = bases.at[pos2[0], pos2[1]].set(True)
 
     # set random neutral bases
     for i in range(params.num_neutral_bases):
@@ -107,8 +140,8 @@ def init_state(rng_key: jnp.ndarray, params: EnvConfig) -> EnvState:
             params.neutral_bases_min_troops,
             params.neutral_bases_max_troops,
         )
-        board = board.at[pos[0], pos[1], 2].set(num_troops)
-        board = board.at[pos[0], pos[1], 3].set(1)
+        neutral_troops = neutral_troops.at[pos[0], pos[1]].set(num_troops)
+        bases = bases.at[pos[0], pos[1]].set(True)
 
     # set random neutral troops
     for i in range(params.num_neutral_troops_start):
@@ -125,24 +158,43 @@ def init_state(rng_key: jnp.ndarray, params: EnvConfig) -> EnvState:
             minval=params.neutral_bases_min_troops,
             maxval=params.neutral_bases_max_troops,
         )
-        board = board.at[pos[0], pos[1], 2].set(num_troops)
+        neutral_troops = neutral_troops.at[pos[0], pos[1]].set(num_troops)
+
+    board = Board(
+        player_1_troops=player_1_troops,
+        player_2_troops=player_2_troops,
+        neutral_troops=neutral_troops,
+        bases=bases,
+    )
 
     return EnvState(board=board)
 
 
+@jax.jit
 def increase_troops(state: EnvState) -> EnvState:
     # We only increase troops for player 1 and player 2
     board = state.board
-    bonus_troops = state.time == 0
-    for i in range(board.shape[0]):
-        for j in range(board.shape[1]):
-            for k in range(2):
-                # Increase troops for all places with troops if bonus troops
-                if board[i, j, k] > 0:
-                    board = board.at[i, j, k].set(board[i, j, k] + bonus_troops)
-                    # Increse troops for all bases
-                    if board[i, j, 3] > 0:
-                        board = board.at[i, j, k].set(board[i, j, k] + 1)
+    bonus_troops = (state.time == 0).astype(int)
+
+    p1_troop_locations = board.player_1_troops > 0
+    p2_troop_locations = board.player_2_troops > 0
+    base_bonus = board.bases.astype(jnp.int32)
+
+    new_player_1 = (
+        board.player_1_troops
+        + bonus_troops * p1_troop_locations.astype(jnp.int32)
+        + base_bonus * p1_troop_locations.astype(jnp.int32)
+    )
+    new_player_2 = (
+        board.player_2_troops
+        + bonus_troops * p2_troop_locations.astype(jnp.int32)
+        + base_bonus * p2_troop_locations.astype(jnp.int32)
+    )
+
+    new_board = board.replace(
+        player_1_troops=new_player_1, player_2_troops=new_player_2
+    )
+
     # Decrese time and increase to 10 if bonus troops
     time = state.time - 1 + bonus_troops * 10
-    return EnvState(board=board, time=time)
+    return EnvState(board=new_board, time=time)

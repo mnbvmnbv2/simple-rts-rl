@@ -16,46 +16,46 @@ def visualize_board(state: EnvState) -> None:
     empty_color = [1.0, 1.0, 1.0]
 
     # Create a new image
-    image = np.ones((board.shape[0], board.shape[1], 3))
+    image = np.ones((board.width, board.height, 3))
 
     # Fill the image with the colors
-    for i in range(board.shape[0]):
-        for j in range(board.shape[1]):
-            if board[i, j, 0] > 0:
-                if board[i, j, 3] > 0:
+    for i in range(board.width):
+        for j in range(board.height):
+            if board.player_1_troops[i, j] > 0:
+                if board.bases[i, j]:
                     image[i, j] = player_1_base_color
                 else:
                     image[i, j] = player_1_color
                 plt.text(
                     j,
                     i,
-                    str(int(board[i, j, 0])),
+                    str(int(board.player_1_troops[i, j])),
                     ha="center",
                     va="center",
                     color="black",
                 )
-            elif board[i, j, 1] > 0:
-                if board[i, j, 4] > 0:
+            elif board.player_2_troops[i, j] > 0:
+                if board.bases[i, j] > 0:
                     image[i, j] = player_2_base_color
                 else:
                     image[i, j] = player_2_color
                 plt.text(
                     j,
                     i,
-                    str(int(board[i, j, 1])),
+                    str(int(board.player_2_troops[i, j])),
                     ha="center",
                     va="center",
                     color="black",
                 )
-            elif board[i, j, 2] > 0:
-                if board[i, j, 5] > 0:
+            elif board.neutral_troops[i, j] > 0:
+                if board.bases[i, j] > 0:
                     image[i, j] = neutral_base_color
                 else:
                     image[i, j] = neutral_color
                 plt.text(
                     j,
                     i,
-                    str(int(board[i, j, 2])),
+                    str(int(board.neutral_troops[i, j])),
                     ha="center",
                     va="center",
                     color="black",
