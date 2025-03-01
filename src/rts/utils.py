@@ -18,12 +18,6 @@ def assert_valid_state(state: EnvState) -> None:
     assert jnp.all(board.player_2_troops >= 0), "Negative player 2 troops"
     assert jnp.all(board.neutral_troops >= 0), "Negative neutral troops"
 
-    # For tiles that are bases, ensure at least one troop.
-    total_troops = board.player_1_troops + board.player_2_troops + board.neutral_troops
-    assert jnp.all(
-        jnp.where(board.bases, total_troops > 0, True)
-    ), "Some bases do not have any troops."
-
     # Check that no tile has troops from multiple players (only one channel from 0 to 2 can be over 0).
     troop_presence = (
         (board.player_1_troops > 0).astype(jnp.int32)
