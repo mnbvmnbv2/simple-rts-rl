@@ -124,9 +124,10 @@ def move(state: EnvState, player: int, x: int, y: int, action: int) -> EnvState:
         y >= 0, y < board.height
     )
     target_in_bounds = jnp.logical_and(
-        target_x >= 0, target_x < board.width
-    ) & jnp.logical_and(target_y >= 0, target_y < board.height)
-    valid_move = source_in_bounds & target_in_bounds
+        target_y >= 0, target_y < board.width
+    ) & jnp.logical_and(target_x >= 0, target_x < board.height)
+    has_enough_troops = player_troops[y, x] > 1
+    valid_move = source_in_bounds & target_in_bounds & has_enough_troops
 
     # Check target
     num_opponent_player_troops = opponent_player_troops[target_y, target_x]
@@ -143,13 +144,13 @@ def move(state: EnvState, player: int, x: int, y: int, action: int) -> EnvState:
         0, num_opponent_neutral_troops - sorce_troops
     )
 
-    player_troops_at_target = new_source_troops - 1
+    player_troops_at_target = new_source_troops
     player_troops = player_troops.at[y, x].set(
-        jnp.where(valid_move, new_source_troops, player_troops[y, x])
+        jnp.where(valid_move, 1, player_troops[y, x])
     )
     player_troops = player_troops.at[target_y, target_x].set(
         jnp.where(
-            valid_move, player_troops_at_target, player_troops[target_x, target_y]
+            valid_move, player_troops_at_target, player_troops[target_y, target_x]
         )
     )
     opponent_player_troops = opponent_player_troops.at[target_y, target_x].set(
@@ -163,13 +164,13 @@ def move(state: EnvState, player: int, x: int, y: int, action: int) -> EnvState:
         jnp.where(
             valid_move,
             new_opponent_neutral_troops,
-            board.neutral_troops[target_x, target_y],
+            board.neutral_troops[target_y, target_x],
         )
     )
 
     new_board = board.replace(
-        player_1_troops=jnp.where(player == 0, player_troops, board.player_1_troops),
-        player_2_troops=jnp.where(player == 1, player_troops, board.player_2_troops),
+        player_1_troops=jnp.where(player == 0, player_troops, opponent_player_troops),
+        player_2_troops=jnp.where(player == 1, player_troops, opponent_player_troops),
         neutral_troops=neutral_troops,
     )
 
