@@ -107,6 +107,7 @@ def init_state(rng_key: jnp.ndarray, params: EnvConfig) -> EnvState:
     return EnvState(board=board)
 
 
+@jax.jit
 def move(state: EnvState, player: int, x: int, y: int, action: int) -> EnvState:
     board = state.board
 
