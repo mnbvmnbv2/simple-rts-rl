@@ -230,3 +230,56 @@ def test_move_insufficient_troops():
     assert (
         new_state.board.player_1_troops == state.board.player_1_troops
     ).all(), "No move should occur with insufficient troops."
+
+
+def test_failed_neutral_attack_no_player_troop_transfer():
+    """
+    Test that a failed attack on a neutral tile does not result in any player's troop
+    being placed in the target and that the neutral troop count is reduced.
+
+    Setup:
+      - p1 has 5 troops at (1,1) so available attacking troops are 5-1=4.
+      - The neutral tile at (1,2) has 7 troops (7 > 4), so the attack fails.
+
+    Expected:
+      - p1's source tile (1,1) becomes 1.
+      - p1's troops at the target (1,2) remain 0.
+      - The neutral troop count at (1,2) reduced to 3.
+    """
+    # Create a 4x4 board.
+    p1 = [
+        [0, 0, 0, 0],
+        [0, 5, 0, 0],
+        [0, 0, 0, 0],
+        [0, 0, 0, 0],
+    ]
+    p2 = [[0] * 4 for _ in range(4)]
+    neutral = [
+        [0, 0, 0, 0],
+        [0, 0, 0, 0],
+        [0, 7, 0, 0],  # Neutral troops at (1,2)
+        [0, 0, 0, 0],
+    ]
+    bases = [[False] * 4 for _ in range(4)]
+
+    # Use your helper function to create an EnvState.
+    state = create_test_state(p1, p2, neutral, bases)
+
+    # Player 1 moves down (action 2) from (1,1) to (1,2)
+    new_state = move(state, player=0, x=1, y=1, action=2)
+
+    new_p1 = new_state.board.player_1_troops
+    new_neutral = new_state.board.neutral_troops
+
+    # The source tile should now have 1 troop.
+    assert (
+        new_p1[1, 1] == 1
+    ), "After a failed attack, the source cell should be reduced to 1."
+
+    # The target cell should not contain any player 1 troops.
+    assert (
+        new_p1[2, 1] == 0
+    ), "No player's troops should be present in the target tile after a failed attack on a neutral target."
+
+    # The neutral troop count reduced.
+    assert new_neutral[2, 1] == 3, "Neutral troops reduced to 3."

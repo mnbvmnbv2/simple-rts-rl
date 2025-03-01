@@ -135,17 +135,18 @@ def move(state: EnvState, player: int, x: int, y: int, action: int) -> EnvState:
     num_opponent_neutral_troops = board.neutral_troops[target_y, target_x]
     total_oppoent_troops = num_opponent_player_troops + num_opponent_neutral_troops
 
-    sorce_troops = player_troops[y, x] - 1
-
-    new_source_troops = jnp.maximum(1, sorce_troops - total_oppoent_troops)
-    new_opponent_player_troops = jnp.maximum(
-        0, num_opponent_player_troops - sorce_troops
+    num_attacking_troops = player_troops[y, x] - 1
+    remaining_attacking_troops = jnp.maximum(
+        0, num_attacking_troops - total_oppoent_troops
     )
-    new_opponent_neutral_troops = jnp.maximum(
-        0, num_opponent_neutral_troops - sorce_troops
+    num_opponent_player_troops = jnp.maximum(
+        0, num_opponent_player_troops - num_attacking_troops
+    )
+    num_opponent_neutral_troops = jnp.maximum(
+        0, num_opponent_neutral_troops - num_attacking_troops
     )
 
-    player_troops_at_target = new_source_troops
+    player_troops_at_target = remaining_attacking_troops
     player_troops = player_troops.at[y, x].set(
         jnp.where(valid_move, 1, player_troops[y, x])
     )
@@ -157,14 +158,14 @@ def move(state: EnvState, player: int, x: int, y: int, action: int) -> EnvState:
     opponent_player_troops = opponent_player_troops.at[target_y, target_x].set(
         jnp.where(
             valid_move,
-            new_opponent_player_troops,
+            num_opponent_player_troops,
             opponent_player_troops[target_y, target_x],
         )
     )
     neutral_troops = board.neutral_troops.at[target_y, target_x].set(
         jnp.where(
             valid_move,
-            new_opponent_neutral_troops,
+            num_opponent_neutral_troops,
             board.neutral_troops[target_y, target_x],
         )
     )
