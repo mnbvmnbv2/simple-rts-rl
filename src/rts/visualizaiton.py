@@ -1,10 +1,12 @@
 from matplotlib import pyplot as plt
 import numpy as np
+from IPython.display import clear_output
 
 from src.rts.env import EnvState
 
 
 def visualize_board(state: EnvState) -> None:
+    clear_output(wait=True)
     board = state.board
     # Visualize the board
     player_1_base_color = [0.0, 0.0, 0.8]
