@@ -1,4 +1,5 @@
 import chex
+import jax
 import jax.numpy as jnp
 
 from src.rts.env import EnvState
@@ -35,6 +36,7 @@ def assert_valid_state(state: EnvState) -> None:
     assert state.time >= 0, "Time is negative."
 
 
+@jax.jit
 def get_legal_moves(state: EnvState, player: int) -> jnp.ndarray:
     board = state.board
     # Select the troop array for the given player.
