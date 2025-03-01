@@ -27,75 +27,6 @@ class EnvState:
     time: int = 5
 
 
-def move(state: EnvState, player: int, x: int, y: int, action: int) -> EnvState:
-    board = state.board
-    if board.width <= x or board.height <= y:
-        return state
-
-    if player == 0:
-        troops = board.player_1_troops
-    else:
-        troops = board.player_2_troops
-
-    if troops[y, x] < 2:
-        return state
-
-    target_x, target_y = x, y
-    if action == 0:
-        target_y = y - 1
-    elif action == 1:
-        target_x = x + 1
-    elif action == 2:
-        target_y = y + 1
-    elif action == 3:
-        target_x = x - 1
-
-    # Check if the target is within bounds
-    if (
-        target_x < 0
-        or target_y < 0
-        or target_x >= board.width
-        or target_y >= board.height
-    ):
-        return state
-
-    if player == 0:
-        opponent_troops = board.player_2_troops
-    else:
-        opponent_troops = board.player_1_troops
-
-    # Check if the target
-    # has other player's troops
-    if opponent_troops[target_y, target_x] > 0:
-        target_troops = opponent_troops[target_y, target_x]
-    # Check if the target has neutral troops
-    elif board.neutral_troops[target_y, target_x] > 0:
-        target_troops = board.neutral_troops[target_y, target_x]
-        opponent_troops = board.neutral_troops
-    else:
-        target_troops = 0
-
-    sorce_troops = troops[y, x] - 1
-    if target_troops == 0:
-        troops = troops.at[target_y, target_x].set(
-            troops[y, x] - 1 + troops[target_y, target_x]
-        )
-        troops = troops.at[y, x].set(1)
-    elif target_troops > sorce_troops:
-        opponent_troops = opponent_troops.at[target_y, target_x].set(
-            target_troops - sorce_troops + 1
-        )
-        troops = troops.at[y, x].set(1)
-    else:
-        opponent_troops = opponent_troops.at[target_y, target_x].set(0)
-        troops = troops.at[y, x].set(sorce_troops - target_troops)
-        if troops[y, x] > 1:
-            troops = troops.at[target_y, target_x].set(troops[y, x] - 1)
-            troops = troops.at[y, x].set(1)
-
-    return EnvState(board=board, time=state.time)
-
-
 def init_state(rng_key: jnp.ndarray, params: EnvConfig) -> EnvState:
     """Each tile has 4 channels:
     1. Player 1 troops
@@ -168,6 +99,75 @@ def init_state(rng_key: jnp.ndarray, params: EnvConfig) -> EnvState:
     )
 
     return EnvState(board=board)
+
+
+def move(state: EnvState, player: int, x: int, y: int, action: int) -> EnvState:
+    board = state.board
+    if board.width <= x or board.height <= y:
+        return state
+
+    if player == 0:
+        troops = board.player_1_troops
+    else:
+        troops = board.player_2_troops
+
+    if troops[y, x] < 2:
+        return state
+
+    target_x, target_y = x, y
+    if action == 0:
+        target_y = y - 1
+    elif action == 1:
+        target_x = x + 1
+    elif action == 2:
+        target_y = y + 1
+    elif action == 3:
+        target_x = x - 1
+
+    # Check if the target is within bounds
+    if (
+        target_x < 0
+        or target_y < 0
+        or target_x >= board.width
+        or target_y >= board.height
+    ):
+        return state
+
+    if player == 0:
+        opponent_troops = board.player_2_troops
+    else:
+        opponent_troops = board.player_1_troops
+
+    # Check if the target
+    # has other player's troops
+    if opponent_troops[target_y, target_x] > 0:
+        target_troops = opponent_troops[target_y, target_x]
+    # Check if the target has neutral troops
+    elif board.neutral_troops[target_y, target_x] > 0:
+        target_troops = board.neutral_troops[target_y, target_x]
+        opponent_troops = board.neutral_troops
+    else:
+        target_troops = 0
+
+    sorce_troops = troops[y, x] - 1
+    if target_troops == 0:
+        troops = troops.at[target_y, target_x].set(
+            troops[y, x] - 1 + troops[target_y, target_x]
+        )
+        troops = troops.at[y, x].set(1)
+    elif target_troops > sorce_troops:
+        opponent_troops = opponent_troops.at[target_y, target_x].set(
+            target_troops - sorce_troops + 1
+        )
+        troops = troops.at[y, x].set(1)
+    else:
+        opponent_troops = opponent_troops.at[target_y, target_x].set(0)
+        troops = troops.at[y, x].set(sorce_troops - target_troops)
+        if troops[y, x] > 1:
+            troops = troops.at[target_y, target_x].set(troops[y, x] - 1)
+            troops = troops.at[y, x].set(1)
+
+    return EnvState(board=board, time=state.time)
 
 
 @jax.jit
