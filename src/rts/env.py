@@ -1,3 +1,5 @@
+from functools import partial
+
 import jax
 import jax.numpy as jnp
 from flax import struct
@@ -27,69 +29,73 @@ class EnvState:
     time: int = 5
 
 
+@partial(jax.jit, static_argnames=("params",))
 def init_state(rng_key: jnp.ndarray, params: EnvConfig) -> EnvState:
-    """Each tile has 4 channels:
-    1. Player 1 troops
-    2. Player 2 troops
-    3. Neutral troops
-    4. Base"""
-    # create a board
+    """Generate a new environment state using a flat grid approach."""
     width = params.board_width
     height = params.board_height
+    total_cells = width * height
 
-    player_1_troops = jnp.zeros((width, height), dtype=jnp.int32)
-    player_2_troops = jnp.zeros((width, height), dtype=jnp.int32)
-    neutral_troops = jnp.zeros((width, height), dtype=jnp.int32)
-    bases = jnp.zeros((width, height), dtype=jnp.bool_)
-    # randomly select 2 start positions that should be unique
-    pos1 = jax.random.randint(rng_key, (2,), 0, width)
-    rng_key, _ = jax.random.split(rng_key)
-    pos2 = jax.random.randint(rng_key, (2,), 0, width)
-    while jnp.array_equal(pos1, pos2):
-        rng_key, _ = jax.random.split(rng_key)
-        pos2 = jax.random.randint(rng_key, (2,), 0, width)
+    # Total number of special cells to assign.
+    num_special = 2 + params.num_neutral_bases + params.num_neutral_troops_start
+    assert total_cells >= num_special, "Board too small for the required placements."
 
-    # set p1 troop and base
-    player_1_troops = player_1_troops.at[pos1[0], pos1[1]].set(5)
-    bases = bases.at[pos1[0], pos1[1]].set(True)
-    # set p2 troop and base
-    player_2_troops = player_2_troops.at[pos2[0], pos2[1]].set(5)
-    bases = bases.at[pos2[0], pos2[1]].set(True)
+    # Get a random permutation of all cell indices.
+    rng_key, subkey = jax.random.split(rng_key)
+    all_indices = jax.random.permutation(subkey, total_cells)
 
-    # set random neutral bases
-    for i in range(params.num_neutral_bases):
-        rng_key, _ = jax.random.split(rng_key)
-        pos = jax.random.randint(rng_key, (2,), 0, width)
-        while jnp.array_equal(pos, pos1) or jnp.array_equal(pos, pos2):
-            rng_key, _ = jax.random.split(rng_key)
-            pos = jax.random.randint(rng_key, (2,), 0, width)
-        # set random number of neutral troops
-        rng_key, _ = jax.random.split(rng_key)
-        num_troops = jax.random.randint(
-            rng_key,
-            (),
-            params.neutral_bases_min_troops,
-            params.neutral_bases_max_troops,
-        )
-        neutral_troops = neutral_troops.at[pos[0], pos[1]].set(num_troops)
-        bases = bases.at[pos[0], pos[1]].set(True)
+    # Assign positions (flattened indices) for the special placements.
+    p1_index = all_indices[0]  # Player 1 base
+    p2_index = all_indices[1]  # Player 2 base
+    neutral_base_indices = all_indices[2 : 2 + params.num_neutral_bases]
+    neutral_troop_indices = all_indices[
+        2 + params.num_neutral_bases : 2
+        + params.num_neutral_bases
+        + params.num_neutral_troops_start
+    ]
 
-    # set random neutral troops
-    for i in range(params.num_neutral_troops_start):
-        rng_key, _ = jax.random.split(rng_key)
-        pos = jax.random.randint(rng_key, (2,), 0, width)
-        while jnp.array_equal(pos, pos1) or jnp.array_equal(pos, pos2):
-            rng_key, _ = jax.random.split(rng_key)
-            pos = jax.random.randint(rng_key, (2,), 0, width)
-        # set random number of neutral troops
-        rng_key, _ = jax.random.split(rng_key)
-        num_troops = jax.random.randint(
-            rng_key,
-            shape=(),
-            minval=params.neutral_bases_min_troops,
-            maxval=params.neutral_bases_max_troops,
-        )
-        neutral_troops = neutral_troops.at[pos[0], pos[1]].set(num_troops)
+    # Initialize flat arrays for the board.
+    player_1_troops_flat = jnp.zeros(total_cells, dtype=jnp.int32)
+    player_2_troops_flat = jnp.zeros(total_cells, dtype=jnp.int32)
+    neutral_troops_flat = jnp.zeros(total_cells, dtype=jnp.int32)
+    bases_flat = jnp.zeros(total_cells, dtype=jnp.bool_)
+
+    # Set player bases with 5 troops and mark base.
+    player_1_troops_flat = player_1_troops_flat.at[p1_index].set(5)
+    bases_flat = bases_flat.at[p1_index].set(True)
+    player_2_troops_flat = player_2_troops_flat.at[p2_index].set(5)
+    bases_flat = bases_flat.at[p2_index].set(True)
+
+    # For neutral bases, assign a random troop count and mark the base.
+    rng_key, subkey = jax.random.split(rng_key)
+    neutral_base_troops = jax.random.randint(
+        subkey,
+        shape=(params.num_neutral_bases,),
+        minval=params.neutral_bases_min_troops,
+        maxval=params.neutral_bases_max_troops,
+    )
+    neutral_troops_flat = neutral_troops_flat.at[neutral_base_indices].set(
+        neutral_base_troops
+    )
+    bases_flat = bases_flat.at[neutral_base_indices].set(True)
+
+    # For neutral troops without a base, assign a random troop count.
+    rng_key, subkey = jax.random.split(rng_key)
+    neutral_troops_start = jax.random.randint(
+        subkey,
+        shape=(params.num_neutral_troops_start,),
+        minval=params.neutral_bases_min_troops,
+        maxval=params.neutral_bases_max_troops,
+    )
+    neutral_troops_flat = neutral_troops_flat.at[neutral_troop_indices].set(
+        neutral_troops_start
+    )
+
+    # Reshape flat arrays back into (width, height) grids.
+    player_1_troops = player_1_troops_flat.reshape((width, height))
+    player_2_troops = player_2_troops_flat.reshape((width, height))
+    neutral_troops = neutral_troops_flat.reshape((width, height))
+    bases = bases_flat.reshape((width, height))
 
     board = Board(
         player_1_troops=player_1_troops,
@@ -103,71 +109,71 @@ def init_state(rng_key: jnp.ndarray, params: EnvConfig) -> EnvState:
 
 def move(state: EnvState, player: int, x: int, y: int, action: int) -> EnvState:
     board = state.board
-    if board.width <= x or board.height <= y:
-        return state
 
-    if player == 0:
-        troops = board.player_1_troops
-    else:
-        troops = board.player_2_troops
+    player_troops = jnp.where(player == 0, board.player_1_troops, board.player_2_troops)
+    opponent_player_troops = jnp.where(
+        player == 0, board.player_2_troops, board.player_1_troops
+    )
+    neutral_troops = board.neutral_troops
 
-    if troops[y, x] < 2:
-        return state
-
-    target_x, target_y = x, y
-    if action == 0:
-        target_y = y - 1
-    elif action == 1:
-        target_x = x + 1
-    elif action == 2:
-        target_y = y + 1
-    elif action == 3:
-        target_x = x - 1
+    target_x = jnp.where(action == 1, x + 1, jnp.where(action == 3, x - 1, x))
+    target_y = jnp.where(action == 0, y - 1, jnp.where(action == 2, y + 1, y))
 
     # Check if the target is within bounds
-    if (
-        target_x < 0
-        or target_y < 0
-        or target_x >= board.width
-        or target_y >= board.height
-    ):
-        return state
+    source_in_bounds = jnp.logical_and(x >= 0, x < board.width) & jnp.logical_and(
+        y >= 0, y < board.height
+    )
+    target_in_bounds = jnp.logical_and(
+        target_x >= 0, target_x < board.width
+    ) & jnp.logical_and(target_y >= 0, target_y < board.height)
+    valid_move = source_in_bounds & target_in_bounds
 
-    if player == 0:
-        opponent_troops = board.player_2_troops
-    else:
-        opponent_troops = board.player_1_troops
+    # Check target
+    num_opponent_player_troops = opponent_player_troops[target_y, target_x]
+    num_opponent_neutral_troops = board.neutral_troops[target_y, target_x]
+    total_oppoent_troops = num_opponent_player_troops + num_opponent_neutral_troops
 
-    # Check if the target
-    # has other player's troops
-    if opponent_troops[target_y, target_x] > 0:
-        target_troops = opponent_troops[target_y, target_x]
-    # Check if the target has neutral troops
-    elif board.neutral_troops[target_y, target_x] > 0:
-        target_troops = board.neutral_troops[target_y, target_x]
-        opponent_troops = board.neutral_troops
-    else:
-        target_troops = 0
+    sorce_troops = player_troops[y, x] - 1
 
-    sorce_troops = troops[y, x] - 1
-    if target_troops == 0:
-        troops = troops.at[target_y, target_x].set(
-            troops[y, x] - 1 + troops[target_y, target_x]
+    new_source_troops = jnp.maximum(1, sorce_troops - total_oppoent_troops)
+    new_opponent_player_troops = jnp.maximum(
+        0, num_opponent_player_troops - sorce_troops
+    )
+    new_opponent_neutral_troops = jnp.maximum(
+        0, num_opponent_neutral_troops - sorce_troops
+    )
+
+    player_troops_at_target = new_source_troops - 1
+    player_troops = player_troops.at[y, x].set(
+        jnp.where(valid_move, new_source_troops, player_troops[y, x])
+    )
+    player_troops = player_troops.at[target_y, target_x].set(
+        jnp.where(
+            valid_move, player_troops_at_target, player_troops[target_x, target_y]
         )
-        troops = troops.at[y, x].set(1)
-    elif target_troops > sorce_troops:
-        opponent_troops = opponent_troops.at[target_y, target_x].set(
-            target_troops - sorce_troops + 1
+    )
+    opponent_player_troops = opponent_player_troops.at[target_y, target_x].set(
+        jnp.where(
+            valid_move,
+            new_opponent_player_troops,
+            opponent_player_troops[target_y, target_x],
         )
-        troops = troops.at[y, x].set(1)
-    else:
-        opponent_troops = opponent_troops.at[target_y, target_x].set(0)
-        troops = troops.at[y, x].set(sorce_troops - target_troops)
-        if troops[y, x] > 1:
-            troops = troops.at[target_y, target_x].set(troops[y, x] - 1)
-            troops = troops.at[y, x].set(1)
+    )
+    neutral_troops = board.neutral_troops.at[target_y, target_x].set(
+        jnp.where(
+            valid_move,
+            new_opponent_neutral_troops,
+            board.neutral_troops[target_x, target_y],
+        )
+    )
 
-    return EnvState(board=board, time=state.time)
+    new_board = board.replace(
+        player_1_troops=jnp.where(player == 0, player_troops, board.player_1_troops),
+        player_2_troops=jnp.where(player == 1, player_troops, board.player_2_troops),
+        neutral_troops=neutral_troops,
+    )
+
+    return EnvState(board=new_board, time=state.time)
 
 
 @jax.jit
