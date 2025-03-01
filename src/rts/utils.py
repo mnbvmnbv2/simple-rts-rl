@@ -62,3 +62,11 @@ def get_legal_moves(state: EnvState, player: int) -> jnp.ndarray:
         [left_possible, down_possible, right_possible, up_possible], axis=-1
     )
     return legal_moves
+
+
+def fixed_argwhere(mask, max_actions: int = 100):
+    # Here, we force the output of argwhere to have shape (max_actions, mask.ndim).
+    indices = jnp.argwhere(mask, size=max_actions, fill_value=-1)
+    # Compute the actual number of legal actions as a scalar.
+    num_actions = jnp.sum(mask)
+    return indices, num_actions
