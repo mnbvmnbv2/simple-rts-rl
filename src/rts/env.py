@@ -16,11 +16,11 @@ class Board:
 
     @property
     def width(self) -> int:
-        return self.player_1_troops.shape[0]
+        return self.player_1_troops.shape[1]
 
     @property
     def height(self) -> int:
-        return self.player_1_troops.shape[1]
+        return self.player_1_troops.shape[0]
 
 
 @struct.dataclass
@@ -91,11 +91,17 @@ def init_state(rng_key: jnp.ndarray, params: EnvConfig) -> EnvState:
         neutral_troops_start
     )
 
-    # Reshape flat arrays back into (width, height) grids.
-    player_1_troops = player_1_troops_flat.reshape((width, height))
-    player_2_troops = player_2_troops_flat.reshape((width, height))
-    neutral_troops = neutral_troops_flat.reshape((width, height))
-    bases = bases_flat.reshape((width, height))
+    # Reshape flat arrays back into (height, width) grids.
+    player_1_troops = player_1_troops_flat.reshape(
+        (params.board_height, params.board_width)
+    )
+    player_2_troops = player_2_troops_flat.reshape(
+        (params.board_height, params.board_width)
+    )
+    neutral_troops = neutral_troops_flat.reshape(
+        (params.board_height, params.board_width)
+    )
+    bases = bases_flat.reshape((params.board_height, params.board_width))
 
     board = Board(
         player_1_troops=player_1_troops,
@@ -125,8 +131,8 @@ def move(state: EnvState, player: int, x: int, y: int, action: int) -> EnvState:
         y >= 0, y < board.height
     )
     target_in_bounds = jnp.logical_and(
-        target_y >= 0, target_y < board.width
-    ) & jnp.logical_and(target_x >= 0, target_x < board.height)
+        target_y >= 0, target_y < board.height
+    ) & jnp.logical_and(target_x >= 0, target_x < board.width)
     has_enough_troops = player_troops[y, x] > 1
     valid_move = source_in_bounds & target_in_bounds & has_enough_troops
 

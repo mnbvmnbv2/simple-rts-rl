@@ -48,18 +48,14 @@ def get_legal_moves(state: EnvState, player: int) -> jnp.ndarray:
     I, J = jnp.meshgrid(x_coords, y_coords, indexing="ij")
 
     # Compute boundary conditions for each direction.
-    # Direction 0: move left -> legal if x > 0.
-    left_possible = (I > 0) & active
-    # Direction 1: move down -> legal if y < height - 1.
-    down_possible = (J < height - 1) & active
-    # Direction 2: move right -> legal if x < width - 1.
-    right_possible = (I < width - 1) & active
-    # Direction 3: move up -> legal if y > 0.
     up_possible = (J > 0) & active
+    right_possible = (I < width - 1) & active
+    down_possible = (J < height - 1) & active
+    left_possible = (I > 0) & active
 
     # Stack the directional legal move masks into the last dimension.
     legal_moves = jnp.stack(
-        [left_possible, down_possible, right_possible, up_possible], axis=-1
+        [up_possible, right_possible, down_possible, left_possible], axis=-1
     )
     return legal_moves
 

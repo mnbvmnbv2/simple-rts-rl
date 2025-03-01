@@ -21,8 +21,8 @@ def visualize_board(state: EnvState) -> None:
     image = np.ones((board.width, board.height, 3))
 
     # Fill the image with the colors
-    for i in range(board.width):
-        for j in range(board.height):
+    for i in range(board.height):
+        for j in range(board.width):
             if board.player_1_troops[i, j] > 0:
                 if board.bases[i, j]:
                     image[i, j] = player_1_base_color
