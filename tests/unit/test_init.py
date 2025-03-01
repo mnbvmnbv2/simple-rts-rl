@@ -1,4 +1,5 @@
 import jax
+import jax.numpy as jnp
 import pytest
 from src.rts.config import EnvConfig
 from src.rts.env import init_state
@@ -48,3 +49,22 @@ def test_init_state(params):
         init_rng = jax.random.PRNGKey(i)
         state = init_state(init_rng, params)
         assert_valid_state(state)
+
+
+def test_init_state_minimal_board():
+    """
+    Test initialization on a minimal board where total_cells exactly equals num_special.
+    For a 3x3 board and parameters chosen so that 2 (players) + num_neutral_bases + num_neutral_troops_start equals 9.
+    """
+    params = EnvConfig(
+        board_width=3,
+        board_height=3,
+        num_neutral_bases=2,
+        num_neutral_troops_start=5,  # 2 + 2 + 5 = 9
+        neutral_bases_min_troops=2,
+        neutral_bases_max_troops=5,
+    )
+    state = init_state(jax.random.PRNGKey(42), params)
+    # There should be exactly 2 (player bases) + 2 (neutral bases) marked as bases.
+    num_bases = int(jnp.sum(state.board.bases))
+    assert num_bases == 4

@@ -1,0 +1,28 @@
+import jax
+import jax.numpy as jnp
+import pytest
+
+from src.rts.env import Board, EnvState, init_state, move, increase_troops
+from src.rts.utils import assert_valid_state, get_legal_moves, fixed_argwhere
+from src.rts.config import EnvConfig
+
+
+def test_random_sequence_validity():
+    """
+    Run a sequence of moves (both players) on a small board to ensure the state remains valid.
+    """
+    params = EnvConfig(
+        board_width=5,
+        board_height=5,
+        num_neutral_bases=2,
+        num_neutral_troops_start=3,
+        neutral_bases_min_troops=2,
+        neutral_bases_max_troops=4,
+    )
+    state = init_state(jax.random.PRNGKey(123), params)
+    for _ in range(50):
+        # Here we use dummy moves (which may be invalid); we simply verify that state remains valid.
+        state = move(state, player=0, x=2, y=2, action=1)
+        state = move(state, player=1, x=2, y=2, action=3)
+        state = increase_troops(state)
+        assert_valid_state(state)

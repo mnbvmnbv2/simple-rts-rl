@@ -283,3 +283,60 @@ def test_failed_neutral_attack_no_player_troop_transfer():
 
     # The neutral troop count reduced.
     assert new_neutral[2, 1] == 3, "Neutral troops reduced to 3."
+
+
+def test_move_equal_combat():
+    """
+    Test a move where the attacking troops exactly equal the total defending troops.
+    In this case, the attack should reduce the source to 1 and the target remains empty.
+    """
+    # p1 at (1,1) has 5 troops, so attacking troops = 4.
+    # p2 at target (1,2) has exactly 4 troops.
+    p1 = [
+        [0, 0, 0],
+        [0, 5, 0],
+        [0, 0, 0],
+    ]
+    p2 = [
+        [0, 0, 0],
+        [0, 0, 4],
+        [0, 0, 0],
+    ]
+    neutral = [
+        [0, 0, 0],
+        [0, 0, 0],
+        [0, 0, 0],
+    ]
+    bases = [
+        [False, False, False],
+        [False, True, False],
+        [False, False, False],
+    ]
+    state = create_test_state(p1, p2, neutral, bases)
+    # Action 1 means move right: from (1,1) to (1,2)
+    new_state = move(state, player=0, x=1, y=1, action=1)
+    new_p1 = new_state.board.player_1_troops
+    new_p2 = new_state.board.player_2_troops
+    # Expected: p1's source becomes 1 and the target remains 0.
+    assert new_p1[1, 1] == 1
+    assert new_p1[1, 2] == 0
+    assert new_p2[1, 2] == 0
+
+
+def test_move_invalid_action_no_change():
+    """
+    Test that if an invalid move action is provided (e.g. moving up from the top edge),
+    the state remains unchanged.
+    """
+    p1 = [[5, 0], [0, 0]]
+    p2 = [[0, 0], [0, 0]]
+    neutral = [[0, 0], [0, 0]]
+    bases = [[True, False], [False, False]]
+    state = create_test_state(p1, p2, neutral, bases)
+    # For cell (0,0), only right and down are legal.
+    # Provide an invalid action (action 0 corresponds to moving up).
+    new_state = move(state, player=0, x=0, y=0, action=0)
+    # Verify that the state remains unchanged.
+    assert jnp.all(new_state.board.player_1_troops == state.board.player_1_troops)
+    assert jnp.all(new_state.board.player_2_troops == state.board.player_2_troops)
+    assert jnp.all(new_state.board.neutral_troops == state.board.neutral_troops)
