@@ -152,7 +152,9 @@ def move(state: EnvState, player: int, x: int, y: int, action: int) -> EnvState:
         0, num_opponent_neutral_troops - num_attacking_troops
     )
 
-    player_troops_at_target = remaining_attacking_troops
+    player_troops_at_target = (
+        remaining_attacking_troops + player_troops[target_y, target_x]
+    )
     player_troops = player_troops.at[y, x].set(
         jnp.where(valid_move, 1, player_troops[y, x])
     )
