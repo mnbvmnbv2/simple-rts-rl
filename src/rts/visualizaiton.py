@@ -18,7 +18,7 @@ def visualize_board(state: EnvState) -> None:
     empty_color = [1.0, 1.0, 1.0]
 
     # Create a new image
-    image = np.ones((board.width, board.height, 3))
+    image = np.ones((board.height, board.width, 3))
 
     # Fill the image with the colors
     for i in range(board.height):

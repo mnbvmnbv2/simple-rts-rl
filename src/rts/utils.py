@@ -42,10 +42,8 @@ def get_legal_moves(state: EnvState, player: int) -> jnp.ndarray:
     width = board.width
     height = board.height
     # Create a grid of coordinates.
-    x_coords = jnp.arange(width)
-    y_coords = jnp.arange(height)
-    # Use meshgrid with indexing 'ij' so that I corresponds to x and J to y.
-    I, J = jnp.meshgrid(x_coords, y_coords, indexing="ij")
+    # Use 'xy' indexing so that the resulting arrays have shape (height, width)
+    I, J = jnp.meshgrid(jnp.arange(width), jnp.arange(height), indexing="xy")
 
     # Compute boundary conditions for each direction.
     up_possible = (J > 0) & active

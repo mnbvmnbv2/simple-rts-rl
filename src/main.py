@@ -5,7 +5,7 @@ from src.rts.env import EnvState, init_state, move, increase_troops
 from src.rts.utils import get_legal_moves, fixed_argwhere
 
 
-# @jax.jit
+@jax.jit
 def step(state: EnvState, rng_key):
     # p1 move
     legal_actions_mask = get_legal_moves(state, 0)
@@ -15,7 +15,6 @@ def step(state: EnvState, rng_key):
     rng_key, subkey = jax.random.split(rng_key)
     action_idx = jax.random.randint(subkey, (), 0, num_actions)
     action = jnp.take(legal_actions, action_idx, axis=0)
-    print(action)
     state = move(state, 0, action[1], action[0], action[2])
     # p2 move
     legal_actions_mask = get_legal_moves(state, 1)
@@ -25,7 +24,6 @@ def step(state: EnvState, rng_key):
     rng_key, subkey = jax.random.split(rng_key)
     action_idx = jax.random.randint(subkey, (), 0, num_actions)
     action = jnp.take(legal_actions, action_idx, axis=0)
-    print(action)
     state = move(state, 1, action[1], action[0], action[2])
     state = increase_troops(state)
     return state
