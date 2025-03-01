@@ -340,3 +340,38 @@ def test_move_invalid_action_no_change():
     assert jnp.all(new_state.board.player_1_troops == state.board.player_1_troops)
     assert jnp.all(new_state.board.player_2_troops == state.board.player_2_troops)
     assert jnp.all(new_state.board.neutral_troops == state.board.neutral_troops)
+
+
+def test_move_own_troops():
+    """
+    Test a moving onto own troops.
+    """
+    # p1 at (1,1) has 5 troops, so attacking troops = 4.
+    # p1 at target (0,1) has 7 troops.
+    p1 = [
+        [0, 7, 0],
+        [0, 5, 0],
+        [0, 0, 0],
+    ]
+    p2 = [
+        [0, 0, 0],
+        [0, 0, 4],
+        [0, 0, 0],
+    ]
+    neutral = [
+        [0, 0, 0],
+        [0, 0, 0],
+        [0, 0, 0],
+    ]
+    bases = [
+        [False, False, False],
+        [False, True, False],
+        [False, False, False],
+    ]
+    state = create_test_state(p1, p2, neutral, bases)
+    # Action 0 means move up: from (1,1) to (0,1)
+    new_state = move(state, player=0, x=1, y=1, action=0)
+    new_p1 = new_state.board.player_1_troops
+    # Expected: p1's source becomes 1.
+    assert new_p1[1, 1] == 1
+    assert new_p1[0, 1] == 11
