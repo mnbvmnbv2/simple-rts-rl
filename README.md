@@ -1,14 +1,5 @@
 # simple-rts-rl
 
-
-## Build docs
-
-`rd -r build | uv run sphinx-build -b html ./source ./build | uv run python -m http.server -d build`
-
-or
-
-`uv run sphinx-autobuild source build/html`
-
 **Simple-RTS-RL** is a minimalist grid-based real-time strategy game designed for reinforcement learning experiments. The game features two players competing to control territory by moving and battling on a rectangular grid.
 
 ---
@@ -43,3 +34,17 @@ or
 - Cells marked as **bases** receive additional bonuses during reinforcement phases.
 
 ---
+
+
+## Build docs
+
+On windows:
+`rd -r build | uv run sphinx-build -b html ./source ./build | uv run python -m http.server -d build`
+
+or
+
+`uv run sphinx-autobuild source build/html`
+
+## Playable
+
+`uv run python -m src.playable`
