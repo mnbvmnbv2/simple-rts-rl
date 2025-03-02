@@ -11,8 +11,9 @@ def params():
         board_height=10,
         num_neutral_bases=4,
         num_neutral_troops_start=8,
-        neutral_bases_min_troops=1,
-        neutral_bases_max_troops=10,
+        neutral_troops_min=1,
+        neutral_troops_max=10,
+        player_start_troops=5,
     )
 
 

@@ -16,8 +16,9 @@ def test_random_sequence_validity():
         board_height=5,
         num_neutral_bases=2,
         num_neutral_troops_start=3,
-        neutral_bases_min_troops=2,
-        neutral_bases_max_troops=4,
+        neutral_troops_min=2,
+        neutral_troops_max=4,
+        player_start_troops=5,
     )
     state = init_state(jax.random.PRNGKey(123), params)
     for _ in range(50):

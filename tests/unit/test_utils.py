@@ -103,7 +103,7 @@ def test_get_legal_moves_boundaries():
     legal_moves = get_legal_moves(state, player=0)
     # With move order [up, right, down, left]:
     cell_moves = legal_moves[0, 1, :]
-    assert cell_moves[0] == False  # Up move not allowed on top row
+    assert not cell_moves[0]  # Up move not allowed on top row
 
     # Bottom row: cell (2,1) should not allow a downward move.
     board_arr2 = jnp.zeros((3, 3), dtype=jnp.int32).at[2, 1].set(3)
@@ -116,4 +116,4 @@ def test_get_legal_moves_boundaries():
     state2 = EnvState(board=B2, time=5)
     legal_moves2 = get_legal_moves(state2, player=0)
     cell_moves2 = legal_moves2[2, 1, :]
-    assert cell_moves2[2] == False  # Down move not allowed on bottom row
+    assert not cell_moves2[2]  # Down move not allowed on bottom row

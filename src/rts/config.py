@@ -7,5 +7,6 @@ class EnvConfig:
     board_height: int
     num_neutral_bases: int
     num_neutral_troops_start: int
-    neutral_bases_min_troops: int
-    neutral_bases_max_troops: int
+    neutral_troops_min: int
+    neutral_troops_max: int
+    player_start_troops: int

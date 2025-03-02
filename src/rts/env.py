@@ -29,15 +29,15 @@ class EnvState:
     time: int = 5
 
 
-@partial(jax.jit, static_argnames=("params",))
-def init_state(rng_key: jnp.ndarray, params: EnvConfig) -> EnvState:
+@partial(jax.jit, static_argnames=("config",))
+def init_state(rng_key: jnp.ndarray, config: EnvConfig) -> EnvState:
     """Generate a new environment state using a flat grid approach."""
-    width = params.board_width
-    height = params.board_height
+    width = config.board_width
+    height = config.board_height
     total_cells = width * height
 
     # Total number of special cells to assign.
-    num_special = 2 + params.num_neutral_bases + params.num_neutral_troops_start
+    num_special = 2 + config.num_neutral_bases + config.num_neutral_troops_start
     assert total_cells >= num_special, "Board too small for the required placements."
 
     # Get a random permutation of all cell indices.
@@ -47,11 +47,11 @@ def init_state(rng_key: jnp.ndarray, params: EnvConfig) -> EnvState:
     # Assign positions (flattened indices) for the special placements.
     p1_index = all_indices[0]  # Player 1 base
     p2_index = all_indices[1]  # Player 2 base
-    neutral_base_indices = all_indices[2 : 2 + params.num_neutral_bases]
+    neutral_base_indices = all_indices[2 : 2 + config.num_neutral_bases]
     neutral_troop_indices = all_indices[
-        2 + params.num_neutral_bases : 2
-        + params.num_neutral_bases
-        + params.num_neutral_troops_start
+        2 + config.num_neutral_bases : 2
+        + config.num_neutral_bases
+        + config.num_neutral_troops_start
     ]
 
     # Initialize flat arrays for the board.
@@ -60,19 +60,23 @@ def init_state(rng_key: jnp.ndarray, params: EnvConfig) -> EnvState:
     neutral_troops_flat = jnp.zeros(total_cells, dtype=jnp.int32)
     bases_flat = jnp.zeros(total_cells, dtype=jnp.bool_)
 
-    # Set player bases with 5 troops and mark base.
-    player_1_troops_flat = player_1_troops_flat.at[p1_index].set(5)
+    # Set player bases with troops.
+    player_1_troops_flat = player_1_troops_flat.at[p1_index].set(
+        config.player_start_troops
+    )
     bases_flat = bases_flat.at[p1_index].set(True)
-    player_2_troops_flat = player_2_troops_flat.at[p2_index].set(5)
+    player_2_troops_flat = player_2_troops_flat.at[p2_index].set(
+        config.player_start_troops
+    )
     bases_flat = bases_flat.at[p2_index].set(True)
 
     # For neutral bases, assign a random troop count and mark the base.
     rng_key, subkey = jax.random.split(rng_key)
     neutral_base_troops = jax.random.randint(
         subkey,
-        shape=(params.num_neutral_bases,),
-        minval=params.neutral_bases_min_troops,
-        maxval=params.neutral_bases_max_troops,
+        shape=(config.num_neutral_bases,),
+        minval=config.neutral_troops_min,
+        maxval=config.neutral_troops_max,
     )
     neutral_troops_flat = neutral_troops_flat.at[neutral_base_indices].set(
         neutral_base_troops
@@ -83,9 +87,9 @@ def init_state(rng_key: jnp.ndarray, params: EnvConfig) -> EnvState:
     rng_key, subkey = jax.random.split(rng_key)
     neutral_troops_start = jax.random.randint(
         subkey,
-        shape=(params.num_neutral_troops_start,),
-        minval=params.neutral_bases_min_troops,
-        maxval=params.neutral_bases_max_troops,
+        shape=(config.num_neutral_troops_start,),
+        minval=config.neutral_troops_min,
+        maxval=config.neutral_troops_max,
     )
     neutral_troops_flat = neutral_troops_flat.at[neutral_troop_indices].set(
         neutral_troops_start
@@ -93,15 +97,15 @@ def init_state(rng_key: jnp.ndarray, params: EnvConfig) -> EnvState:
 
     # Reshape flat arrays back into (height, width) grids.
     player_1_troops = player_1_troops_flat.reshape(
-        (params.board_height, params.board_width)
+        (config.board_height, config.board_width)
     )
     player_2_troops = player_2_troops_flat.reshape(
-        (params.board_height, params.board_width)
+        (config.board_height, config.board_width)
     )
     neutral_troops = neutral_troops_flat.reshape(
-        (params.board_height, params.board_width)
+        (config.board_height, config.board_width)
     )
-    bases = bases_flat.reshape((params.board_height, params.board_width))
+    bases = bases_flat.reshape((config.board_height, config.board_width))
 
     board = Board(
         player_1_troops=player_1_troops,
