@@ -1,7 +1,7 @@
 import chex
 import jax.numpy as jnp
 import pytest
-from src.rts.env import Board, EnvState, increase_troops, move
+from src.rts.env import Board, EnvState, reinforce_troops, move
 from src.rts.utils import assert_valid_state
 
 
@@ -37,7 +37,7 @@ def board():
 
 def test_increase_troops(board: jnp.array):
     state = EnvState(board=board, time=4)
-    state = increase_troops(state)
+    state = reinforce_troops(state)
     assert_valid_state(state)
 
     # check random two blank tiles
@@ -63,7 +63,7 @@ def test_increase_troops(board: jnp.array):
 
 def test_increase_troops_bonus(board: jnp.array):
     state = EnvState(board=board, time=0)
-    state = increase_troops(state)
+    state = reinforce_troops(state)
     assert_valid_state(state)
 
     # check random two blank tiles

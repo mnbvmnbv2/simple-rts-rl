@@ -1,7 +1,7 @@
 import jax
 import pytest
 from src.rts.config import EnvConfig
-from src.rts.env import EnvState, increase_troops, init_state, move
+from src.rts.env import EnvState, reinforce_troops, init_state, move
 
 
 @pytest.fixture
@@ -32,4 +32,4 @@ def test_move_benchmark(benchmark, state: EnvState):
 
 
 def test_increase_troops_benchmark(benchmark, state: EnvState):
-    benchmark(increase_troops, state)
+    benchmark(reinforce_troops, state)

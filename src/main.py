@@ -1,7 +1,7 @@
 import jax
 import jax.numpy as jnp
 from src.rts.config import EnvConfig
-from src.rts.env import EnvState, init_state, move, increase_troops
+from src.rts.env import EnvState, init_state, move, reinforce_troops
 from src.rts.utils import get_legal_moves, fixed_argwhere
 
 
@@ -25,7 +25,7 @@ def step(state: EnvState, rng_key):
     action_idx = jax.random.randint(subkey, (), 0, num_actions)
     action = jnp.take(legal_actions, action_idx, axis=0)
     state = move(state, 1, action[1], action[0], action[2])
-    state = increase_troops(state)
+    state = reinforce_troops(state)
     return state
 
 

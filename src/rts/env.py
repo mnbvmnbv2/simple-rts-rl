@@ -130,7 +130,7 @@ def move(state: EnvState, player: int, x: int, y: int, action: int) -> EnvState:
     target_x = jnp.where(action == 1, x + 1, jnp.where(action == 3, x - 1, x))
     target_y = jnp.where(action == 0, y - 1, jnp.where(action == 2, y + 1, y))
 
-    # Check if the target is within bounds
+    # Check if the move is valid
     source_in_bounds = jnp.logical_and(x >= 0, x < board.width) & jnp.logical_and(
         y >= 0, y < board.height
     )
@@ -140,11 +140,12 @@ def move(state: EnvState, player: int, x: int, y: int, action: int) -> EnvState:
     has_enough_troops = player_troops[y, x] > 1
     valid_move = source_in_bounds & target_in_bounds & has_enough_troops
 
-    # Check target
+    # Check number of opponent troops in target
     num_opponent_player_troops = opponent_player_troops[target_y, target_x]
     num_opponent_neutral_troops = board.neutral_troops[target_y, target_x]
     total_oppoent_troops = num_opponent_player_troops + num_opponent_neutral_troops
 
+    # Battle logic
     num_attacking_troops = player_troops[y, x] - 1
     remaining_attacking_troops = jnp.maximum(
         0, num_attacking_troops - total_oppoent_troops
@@ -156,6 +157,7 @@ def move(state: EnvState, player: int, x: int, y: int, action: int) -> EnvState:
         0, num_opponent_neutral_troops - num_attacking_troops
     )
 
+    # Update board
     player_troops_at_target = (
         remaining_attacking_troops + player_troops[target_y, target_x]
     )
@@ -192,8 +194,12 @@ def move(state: EnvState, player: int, x: int, y: int, action: int) -> EnvState:
 
 
 @jax.jit
-def increase_troops(state: EnvState) -> EnvState:
-    # We only increase troops for player 1 and player 2
+def reinforce_troops(state: EnvState) -> EnvState:
+    """This function increases troops for players and updates the time.
+
+    When time is 0, all tiles with player troops get a bonus troop.
+    Regardless of time, all tiles with player troops on a base get a troop.
+    """
     board = state.board
     bonus_troops = (state.time == 0).astype(int)
 
