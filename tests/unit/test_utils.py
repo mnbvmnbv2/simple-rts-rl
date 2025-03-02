@@ -1,10 +1,7 @@
-import jax
 import jax.numpy as jnp
-import pytest
 
-from src.rts.env import Board, EnvState, init_state, move, reinforce_troops
-from src.rts.utils import assert_valid_state, get_legal_moves, fixed_argwhere
-from src.rts.config import EnvConfig
+from src.rts.env import Board, EnvState
+from src.rts.utils import get_legal_moves, fixed_argwhere
 
 
 # Helper function to create an EnvState from lists.

@@ -193,8 +193,8 @@ def move(state: EnvState, player: int, x: int, y: int, action: int) -> EnvState:
     return EnvState(board=new_board, time=state.time)
 
 
-@jax.jit
-def reinforce_troops(state: EnvState) -> EnvState:
+@partial(jax.jit, static_argnames=("config",))
+def reinforce_troops(state: EnvState, config: EnvConfig) -> EnvState:
     """This function increases troops for players and updates the time.
 
     When time is 0, all tiles with player troops get a bonus troop.
@@ -223,5 +223,5 @@ def reinforce_troops(state: EnvState) -> EnvState:
     )
 
     # Decrese time and increase to 10 if bonus troops
-    time = state.time - 1 + bonus_troops * 10
+    time = state.time - 1 + bonus_troops * config.bonus_time
     return EnvState(board=new_board, time=time)

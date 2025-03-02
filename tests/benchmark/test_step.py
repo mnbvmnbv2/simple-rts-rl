@@ -5,7 +5,7 @@ from src.rts.env import EnvState, reinforce_troops, init_state, move
 
 
 @pytest.fixture
-def params():
+def config():
     return EnvConfig(
         board_width=10,
         board_height=10,
@@ -14,6 +14,7 @@ def params():
         neutral_troops_min=1,
         neutral_troops_max=10,
         player_start_troops=5,
+        bonus_time=10,
     )
 
 
@@ -23,13 +24,13 @@ def init_rng():
 
 
 @pytest.fixture
-def state(init_rng, params):
-    return init_state(init_rng, params)
+def state(init_rng, config):
+    return init_state(init_rng, config)
 
 
 def test_move_benchmark(benchmark, state: EnvState):
     benchmark(move, state, player=1, x=1, y=1, action=1)
 
 
-def test_increase_troops_benchmark(benchmark, state: EnvState):
-    benchmark(reinforce_troops, state)
+def test_increase_troops_benchmark(benchmark, state: EnvState, config: EnvConfig):
+    benchmark(reinforce_troops, state, config)
