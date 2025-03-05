@@ -225,3 +225,66 @@ def reinforce_troops(state: EnvState, config: EnvConfig) -> EnvState:
     # Decrese time and increase to 10 if bonus troops
     time = state.time - 1 + bonus_troops * config.bonus_time
     return EnvState(board=new_board, time=time)
+
+
+@jax.jit
+def reward_function(state: EnvState, next_state: EnvState, player: int) -> jnp.ndarray:
+    """
+    Rewards:
+        - +1 reward if captured new tile
+        - +10 reward if captured base
+        - +100 reward if defeatued opponent
+
+    Penalties:
+        - -1 if lost tile
+        - -10 if lost base
+        - -100 if defeated
+    """
+    # Get player and opponent troops arrays
+    player_troops_current = jnp.where(
+        player == 0, state.board.player_1_troops, state.board.player_2_troops
+    )
+    player_troops_next = jnp.where(
+        player == 0, next_state.board.player_1_troops, next_state.board.player_2_troops
+    )
+
+    opponent_troops_current = jnp.where(
+        player == 0, state.board.player_2_troops, state.board.player_1_troops
+    )
+    opponent_troops_next = jnp.where(
+        player == 0, next_state.board.player_2_troops, next_state.board.player_1_troops
+    )
+
+    # Calculate tile changes
+    player_tiles_current = jnp.sum(player_troops_current > 0)
+    player_tiles_next = jnp.sum(player_troops_next > 0)
+    tiles_change = player_tiles_next - player_tiles_current
+
+    # Calculate base changes
+    player_bases_current = jnp.sum((player_troops_current > 0) & state.board.bases)
+    player_bases_next = jnp.sum((player_troops_next > 0) & next_state.board.bases)
+    bases_change = player_bases_next - player_bases_current
+
+    # Check for victory/defeat
+    opponent_tiles_current = jnp.sum(opponent_troops_current > 0)
+    opponent_tiles_next = jnp.sum(opponent_troops_next > 0)
+
+    victory = jnp.logical_and(
+        opponent_tiles_current > 0, opponent_tiles_next == 0
+    ).astype(jnp.int32)
+    defeat = jnp.logical_and(player_tiles_current > 0, player_tiles_next == 0).astype(
+        jnp.int32
+    )
+
+    # Calculate total reward
+    total_reward = tiles_change + 10 * bases_change + 100 * victory - 100 * defeat
+
+    return total_reward
+
+
+def reset():
+    pass
+
+
+def step():
+    pass
