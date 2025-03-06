@@ -19,7 +19,28 @@ def step(
     rng_key, subkey = jax.random.split(rng_key)
     action_idx = jax.random.randint(subkey, (), 0, num_actions)
     action = jnp.take(legal_actions, action_idx, axis=0)
-    next_state = move(state, 0, action[1], action[0], action[2])
+    next_state: EnvState = move(state, 0, action[1], action[0], action[2])
+    # p2 move
+    legal_actions_mask = get_legal_moves(next_state, 1)
+    legal_actions, num_actions = fixed_argwhere(
+        legal_actions_mask,
+        max_actions=next_state.board.width * next_state.board.height * 4,
+    )
+    rng_key, subkey = jax.random.split(rng_key)
+    action_idx = jax.random.randint(subkey, (), 0, num_actions)
+    action = jnp.take(legal_actions, action_idx, axis=0)
+    next_state = move(next_state, 1, action[1], action[0], action[2])
+    next_state = reinforce_troops(next_state, config)
+    reward_p1 = reward_function(state, next_state, 0)
+    return next_state, reward_p1
+
+
+@partial(jax.jit, static_argnames=("config",))
+def p1_step(
+    state: EnvState, rng_key: jnp.ndarray, config: EnvConfig, action: jnp.ndarray
+) -> tuple[EnvState, jnp.ndarray]:
+    # p1 move
+    next_state: EnvState = move(state, 0, action[1], action[0], action[2])
     # p2 move
     legal_actions_mask = get_legal_moves(next_state, 1)
     legal_actions, num_actions = fixed_argwhere(

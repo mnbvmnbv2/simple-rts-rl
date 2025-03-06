@@ -22,6 +22,17 @@ class Board:
     def height(self) -> int:
         return self.player_1_troops.shape[0]
 
+    @jax.jit
+    def flatten(self):
+        return jnp.concatenate(
+            [
+                self.player_1_troops.flatten(),
+                self.player_2_troops.flatten(),
+                self.neutral_troops.flatten(),
+                self.bases.flatten(),
+            ]
+        )
+
 
 @struct.dataclass
 class EnvState:
