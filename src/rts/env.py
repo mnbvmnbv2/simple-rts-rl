@@ -293,6 +293,15 @@ def reward_function(state: EnvState, next_state: EnvState, player: int) -> jnp.n
     return total_reward
 
 
+@jax.jit
+def is_done(state: EnvState) -> bool:
+    """Check if the game is finished, when either player has no troops left."""
+    return jnp.logical_or(
+        jnp.all(state.board.player_1_troops == 0),
+        jnp.all(state.board.player_2_troops == 0),
+    )
+
+
 def reset():
     pass
 

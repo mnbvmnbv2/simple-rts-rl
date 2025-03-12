@@ -2,7 +2,7 @@ import chex
 import jax.numpy as jnp
 import pytest
 from src.rts.config import EnvConfig
-from src.rts.env import Board, EnvState, reinforce_troops, move
+from src.rts.env import Board, EnvState, reinforce_troops, move, is_done
 from src.rts.utils import assert_valid_state
 
 
@@ -390,3 +390,52 @@ def test_move_own_troops():
     # Expected: p1's source becomes 1.
     assert new_p1[1, 1] == 1
     assert new_p1[0, 1] == 11
+
+
+def test_is_done_game_not_over():
+    """
+    Test that is_done returns False when both players have troops.
+    """
+    p1 = [
+        [0, 1, 0, 0],
+        [0, 0, 0, 0],
+        [0, 0, 0, 0],
+        [0, 0, 0, 0],
+    ]
+    p2 = [
+        [0, 0, 0, 0],
+        [0, 0, 0, 0],
+        [0, 0, 1, 0],
+        [0, 0, 0, 0],
+    ]
+    neutral = [[0] * 4 for _ in range(4)]
+    bases = [[False] * 4 for _ in range(4)]
+    state = create_test_state(p1, p2, neutral, bases)
+
+    # Check that the game is not done
+    assert not is_done(state), "Game should not be done when both players have troops"
+
+
+def test_is_done_game_over():
+    """
+    Test that is_done returns True when one player has no troops.
+    """
+    # Player 1 has troops, Player 2 has none
+    p1 = [
+        [0, 1, 0, 0],
+        [0, 0, 0, 0],
+        [0, 0, 0, 0],
+        [0, 0, 0, 0],
+    ]
+    p2 = [
+        [0, 0, 0, 0],
+        [0, 0, 0, 0],
+        [0, 0, 0, 0],
+        [0, 0, 0, 0],
+    ]
+    neutral = [[0] * 4 for _ in range(4)]
+    bases = [[False] * 4 for _ in range(4)]
+    state = create_test_state(p1, p2, neutral, bases)
+
+    # Check that the game is done
+    assert is_done(state), "Game should be done when one player has no troops"
