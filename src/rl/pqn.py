@@ -98,10 +98,8 @@ def single_rollout(
 
         done = is_done(next_state)
 
-        # The buffer (y) collects: observation (state.board), action, reward, done, next observation.
         y = (state.board.flatten(), action, p1_reward, done, next_state.board.flatten())
 
-        # The new carry is the updated state, RNG key, and cumulative reward.
         return (next_state, done, rng_key, new_cum_reward), y
 
     (final_state, final_done, final_rng, cum_return), scan_out = jax.lax.scan(
@@ -205,11 +203,9 @@ def train_minibatched(
     losses = []
 
     for iteration in range(params.num_iterations):
-        # Split rng_key for each environment.
         rng_keys = jax.random.split(rng_key, params.num_envs + 1)
         rng_key, rollout_keys = rng_keys[0], rng_keys[1:]
 
-        # Run vmapped rollout across all environments.
         rollout = vmapped_rollout(rollout_keys, config, q_net, params)
         (
             obs_buffer,
@@ -220,12 +216,12 @@ def train_minibatched(
             cum_return,
         ) = rollout
 
-        # Compute returns using vmapped q_lambda_return.
+        print(f"Iteration {iteration} - Cumulative Return: {jnp.mean(cum_return)}")
+
         returns = vmapped_q_lambda_return(
             q_net, rewards_buffer, done_buffer, next_obs_buffer, params
         )
 
-        # Flatten rollout buffers to combine envs and timesteps into one batch dimension.
         flat_observations = obs_buffer.reshape(-1, obs_buffer.shape[-1])
         flat_actions = actions_buffer.reshape(-1)
         flat_returns = returns.reshape(-1)
@@ -233,9 +229,7 @@ def train_minibatched(
         num_samples = flat_observations.shape[0]
         minibatch_size = num_samples // params.num_minibatches
 
-        # Perform two passes (epochs) over the flattened rollout data.
         for epoch in range(params.update_epochs):
-            # Shuffle indices for minibatch splitting.
             rng_key, perm_key = jax.random.split(rng_key)
             permuted_indices = jax.random.permutation(perm_key, num_samples)
 
@@ -288,7 +282,7 @@ if __name__ == "__main__":
         q_lambda=0.92,
         num_envs=50,
         num_steps=250,
-        update_epochs=1,
+        update_epochs=2,
         num_minibatches=4,
         epsilon=0.3,
     )
