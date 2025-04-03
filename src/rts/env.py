@@ -9,7 +9,10 @@ from src.rts.utils import get_legal_moves, fixed_argwhere
 
 
 @partial(jax.jit, static_argnames=("config",))
-def init_state(rng_key: jnp.ndarray, config: EnvConfig) -> EnvState:
+def init_state(
+    rng_key: jnp.ndarray,
+    config: EnvConfig,
+) -> EnvState:
     """Generate a new environment state using a flat grid approach."""
     width = config.board_width
     height = config.board_height
@@ -97,7 +100,13 @@ def init_state(rng_key: jnp.ndarray, config: EnvConfig) -> EnvState:
 
 
 @jax.jit
-def move(state: EnvState, player: int, x: int, y: int, action: int) -> EnvState:
+def move(
+    state: EnvState,
+    player: int,
+    x: int,
+    y: int,
+    action: int,
+) -> EnvState:
     board = state.board
 
     player_troops = jnp.where(player == 0, board.player_1_troops, board.player_2_troops)
@@ -173,7 +182,10 @@ def move(state: EnvState, player: int, x: int, y: int, action: int) -> EnvState:
 
 
 @partial(jax.jit, static_argnames=("config",))
-def reinforce_troops(state: EnvState, config: EnvConfig) -> EnvState:
+def reinforce_troops(
+    state: EnvState,
+    config: EnvConfig,
+) -> EnvState:
     """This function increases troops for players and updates the time.
 
     When time is 0, all tiles with player troops get a bonus troop.
@@ -207,7 +219,11 @@ def reinforce_troops(state: EnvState, config: EnvConfig) -> EnvState:
 
 
 @jax.jit
-def reward_function(state: EnvState, next_state: EnvState, player: int) -> jnp.ndarray:
+def reward_function(
+    state: EnvState,
+    next_state: EnvState,
+    player: int,
+) -> jnp.ndarray:
     """
     Rewards:
         - +1 reward if captured new tile
@@ -271,9 +287,11 @@ def is_done(state: EnvState) -> bool:
 
 
 @partial(jax.jit, static_argnames=("config",))
-def step(
-    state: EnvState, rng_key: jnp.ndarray, config: EnvConfig
-) -> tuple[EnvState, jnp.ndarray]:
+def random_step(
+    state: EnvState,
+    rng_key: jnp.ndarray,
+    config: EnvConfig,
+) -> EnvState:
     # p1 move
     legal_actions_mask = get_legal_moves(state, 0)
     legal_actions, num_actions = fixed_argwhere(
@@ -294,13 +312,15 @@ def step(
     action = jnp.take(legal_actions, action_idx, axis=0)
     next_state = move(next_state, 1, action[1], action[0], action[2])
     next_state = reinforce_troops(next_state, config)
-    reward_p1 = reward_function(state, next_state, 0)
-    return next_state, reward_p1
+    return next_state
 
 
 @partial(jax.jit, static_argnames=("config",))
 def p1_step(
-    state: EnvState, rng_key: jnp.ndarray, config: EnvConfig, action: jnp.ndarray
+    state: EnvState,
+    rng_key: jnp.ndarray,
+    config: EnvConfig,
+    action: jnp.ndarray,
 ) -> tuple[EnvState, jnp.ndarray]:
     # p1 move
     next_state: EnvState = move(state, 0, action[1], action[0], action[2])
