@@ -2,42 +2,10 @@ from functools import partial
 
 import jax
 import jax.numpy as jnp
-from flax import struct
 
 from src.rts.config import EnvConfig
-
-
-@struct.dataclass
-class Board:
-    player_1_troops: jnp.ndarray  # shape: (width, height) of int
-    player_2_troops: jnp.ndarray  # shape: (width, height) of int
-    neutral_troops: jnp.ndarray  # shape: (width, height) of int
-    bases: jnp.ndarray  # shape: (width, height) of bool
-
-    @property
-    def width(self) -> int:
-        return self.player_1_troops.shape[1]
-
-    @property
-    def height(self) -> int:
-        return self.player_1_troops.shape[0]
-
-    @jax.jit
-    def flatten(self):
-        return jnp.concatenate(
-            [
-                self.player_1_troops.flatten(),
-                self.player_2_troops.flatten(),
-                self.neutral_troops.flatten(),
-                self.bases.flatten(),
-            ]
-        )
-
-
-@struct.dataclass
-class EnvState:
-    board: Board
-    time: int = 5
+from src.rts.state import Board, EnvState
+from src.rts.utils import get_legal_moves, fixed_argwhere
 
 
 @partial(jax.jit, static_argnames=("config",))
@@ -302,9 +270,50 @@ def is_done(state: EnvState) -> bool:
     )
 
 
-def reset():
-    pass
+@partial(jax.jit, static_argnames=("config",))
+def step(
+    state: EnvState, rng_key: jnp.ndarray, config: EnvConfig
+) -> tuple[EnvState, jnp.ndarray]:
+    # p1 move
+    legal_actions_mask = get_legal_moves(state, 0)
+    legal_actions, num_actions = fixed_argwhere(
+        legal_actions_mask, max_actions=state.board.width * state.board.height * 4
+    )
+    rng_key, subkey = jax.random.split(rng_key)
+    action_idx = jax.random.randint(subkey, (), 0, num_actions)
+    action = jnp.take(legal_actions, action_idx, axis=0)
+    next_state: EnvState = move(state, 0, action[1], action[0], action[2])
+    # p2 move
+    legal_actions_mask = get_legal_moves(next_state, 1)
+    legal_actions, num_actions = fixed_argwhere(
+        legal_actions_mask,
+        max_actions=next_state.board.width * next_state.board.height * 4,
+    )
+    rng_key, subkey = jax.random.split(rng_key)
+    action_idx = jax.random.randint(subkey, (), 0, num_actions)
+    action = jnp.take(legal_actions, action_idx, axis=0)
+    next_state = move(next_state, 1, action[1], action[0], action[2])
+    next_state = reinforce_troops(next_state, config)
+    reward_p1 = reward_function(state, next_state, 0)
+    return next_state, reward_p1
 
 
-def step():
-    pass
+@partial(jax.jit, static_argnames=("config",))
+def p1_step(
+    state: EnvState, rng_key: jnp.ndarray, config: EnvConfig, action: jnp.ndarray
+) -> tuple[EnvState, jnp.ndarray]:
+    # p1 move
+    next_state: EnvState = move(state, 0, action[1], action[0], action[2])
+    # p2 move
+    legal_actions_mask = get_legal_moves(next_state, 1)
+    legal_actions, num_actions = fixed_argwhere(
+        legal_actions_mask,
+        max_actions=next_state.board.width * next_state.board.height * 4,
+    )
+    rng_key, subkey = jax.random.split(rng_key)
+    action_idx = jax.random.randint(subkey, (), 0, num_actions)
+    action = jnp.take(legal_actions, action_idx, axis=0)
+    next_state = move(next_state, 1, action[1], action[0], action[2])
+    next_state = reinforce_troops(next_state, config)
+    reward_p1 = reward_function(state, next_state, 0)
+    return next_state, reward_p1

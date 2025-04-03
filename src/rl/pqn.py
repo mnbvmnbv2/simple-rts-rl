@@ -8,9 +8,8 @@ import jax.lax
 import jax.numpy as jnp
 
 from src.rts.config import EnvConfig
-from src.rts.env import init_state, is_done
+from src.rts.env import init_state, is_done, p1_step
 from src.rts.utils import get_legal_moves, fixed_argwhere
-from src.main import p1_step
 
 
 @dataclass(frozen=True)
