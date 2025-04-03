@@ -125,7 +125,7 @@ def q_lambda_return(
     done_buffer: jnp.ndarray,
     next_obs_buffer: jnp.ndarray,
     params: Params,
-):
+) -> jnp.ndarray:
     # Compute Q-values for the next observations via vectorized max.
     # This returns an array of shape (num_steps,)
     q_values = jax.vmap(lambda obs: jnp.max(q_net(obs), axis=-1))(next_obs_buffer)
@@ -176,7 +176,7 @@ def train_step(
     observations: jnp.ndarray,
     actions: jnp.ndarray,
     returns: jnp.ndarray,
-):
+) -> jnp.ndarray:
     def loss_fn(q_net):
         q_values = q_net(observations)
         acted_q_values = jnp.take_along_axis(
@@ -195,11 +195,12 @@ def train_minibatched(
     optimizer: nnx.Optimizer,
     config: EnvConfig,
     params: Params,
-):
+) -> tuple[Model, list, list]:
     rng_key = jax.random.PRNGKey(0)
     vmapped_rollout = jax.vmap(single_rollout, in_axes=(0, None, None, None))
     vmapped_q_lambda_return = jax.vmap(q_lambda_return, in_axes=(None, 0, 0, 0, None))
     losses = []
+    cum_returns = []
 
     for iteration in range(params.num_iterations):
         rng_keys = jax.random.split(rng_key, params.num_envs + 1)
@@ -216,6 +217,7 @@ def train_minibatched(
         ) = rollout
 
         print(f"Iteration {iteration} - Cumulative Return: {jnp.mean(cum_return)}")
+        cum_returns.append(cum_return)
 
         returns = vmapped_q_lambda_return(
             q_net, rewards_buffer, done_buffer, next_obs_buffer, params
@@ -258,7 +260,7 @@ def train_minibatched(
         if iteration % 10 == 0:
             print(f"Iteration {iteration} - Loss: {loss}")
 
-    return q_net
+    return q_net, losses, cum_returns
 
 
 if __name__ == "__main__":
