@@ -1,6 +1,6 @@
 from matplotlib import pyplot as plt
-import numpy as np
 from IPython.display import clear_output
+import numpy as np
 
 from src.rts.env import EnvState
 

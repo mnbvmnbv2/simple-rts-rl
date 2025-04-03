@@ -1,7 +1,6 @@
 import pygame
 import jax
 import jax.numpy as jnp
-import numpy as np
 
 from src.rts.config import EnvConfig
 from src.rts.env import init_state, move, reinforce_troops, EnvState, Board
