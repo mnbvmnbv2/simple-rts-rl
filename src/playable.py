@@ -1,6 +1,7 @@
 import pygame
 import jax
 import jax.numpy as jnp
+import distinctipy  # make sure to install via: pip install distinctipy
 
 from src.rts.config import EnvConfig
 from src.rts.env import init_state, move, reinforce_troops, EnvState, Board
@@ -15,57 +16,76 @@ BACKGROUND_COLOR = (255, 255, 255)
 HIGHLIGHT_COLOR = (255, 255, 0)  # Yellow for selection
 TEXT_COLOR = (0, 0, 0)
 
-# Colors for players and neutrals (similar to visualization)
-PLAYER_1_COLOR = (0, 0, 255)
-PLAYER_1_BASE_COLOR = (0, 0, 180)
-PLAYER_2_COLOR = (255, 0, 0)
-PLAYER_2_BASE_COLOR = (180, 0, 0)
+# Colors for neutrals and empty cells
 NEUTRAL_COLOR = (128, 128, 128)
 NEUTRAL_BASE_COLOR = (64, 64, 64)
 EMPTY_COLOR = (255, 255, 255)
 
 
 def draw_board(screen, board: Board, selected_cell=None):
-    """Draw the board grid, troop counts, and highlight the selected cell."""
+    """Draw the board grid, troop counts, and highlight the selected cell.
+    
+    This version works for an arbitrary number of players (using board.player_troops
+    with shape (num_players, height, width)) and generates distinct colors using distinctipy.
+    """
     rows = board.height
     cols = board.width
-
-    # Use a default font (pygame will cache this)
     font = pygame.font.SysFont(None, 24)
 
+    # Number of players from the board shape
+    num_players = board.player_troops.shape[0]
+    
+    # Generate distinct colors for the agents.
+    # distinctipy returns colors as floats in [0, 1]. Convert to 0-255 integer tuples.
+    agent_colors_float = distinctipy.get_colors(num_players, rng=1)
+    agent_colors = [tuple(int(c * 255) for c in color) for color in agent_colors_float]
+
+    # Function to darken a color (for base cells)
+    def darken_color(color, factor=0.6):
+        return tuple(max(0, int(c * factor)) for c in color)
+    
+    agent_base_colors = [darken_color(color) for color in agent_colors]
+
+    # Draw each cell.
     for row in range(rows):
         for col in range(cols):
-            # Compute the rectangle for the current cell.
             rect = pygame.Rect(col * CELL_SIZE, row * CELL_SIZE, CELL_SIZE, CELL_SIZE)
-            # Determine cell color based on board state.
             color = EMPTY_COLOR
-            if board.player_1_troops[row, col] > 0:
-                color = PLAYER_1_BASE_COLOR if board.bases[row, col] else PLAYER_1_COLOR
-            elif board.player_2_troops[row, col] > 0:
-                color = PLAYER_2_BASE_COLOR if board.bases[row, col] else PLAYER_2_COLOR
-            elif board.neutral_troops[row, col] > 0:
-                color = NEUTRAL_BASE_COLOR if board.bases[row, col] else NEUTRAL_COLOR
-
-            # Fill the cell
-            pygame.draw.rect(screen, color, rect)
-            # Draw a border for the cell
-            pygame.draw.rect(screen, GRID_COLOR, rect, 1)
-
-            # Determine troop count and draw it
             troop_count = 0
-            if board.player_1_troops[row, col] > 0:
-                troop_count = int(board.player_1_troops[row, col])
-            elif board.player_2_troops[row, col] > 0:
-                troop_count = int(board.player_2_troops[row, col])
+
+            # Determine which agent controls the cell (if any) by picking the one with the most troops.
+            best_agent = None
+            best_troops = 0
+            for agent in range(num_players):
+                count = board.player_troops[agent, row, col]
+                if count > best_troops:
+                    best_troops = count
+                    best_agent = agent
+
+            if best_troops > 0:
+                # If the cell is a base, use the darker color variant.
+                if board.bases[row, col]:
+                    color = agent_base_colors[best_agent]
+                else:
+                    color = agent_colors[best_agent]
+                troop_count = int(best_troops)
             elif board.neutral_troops[row, col] > 0:
                 troop_count = int(board.neutral_troops[row, col])
+                color = NEUTRAL_BASE_COLOR if board.bases[row, col] else NEUTRAL_COLOR
+            else:
+                color = EMPTY_COLOR
 
+            # Draw the cell background and border.
+            pygame.draw.rect(screen, color, rect)
+            pygame.draw.rect(screen, GRID_COLOR, rect, 1)
+            
+            # Render troop count text if nonzero.
             if troop_count:
                 text_surface = font.render(str(troop_count), True, TEXT_COLOR)
                 text_rect = text_surface.get_rect(center=rect.center)
                 screen.blit(text_surface, text_rect)
 
-            # Highlight the selected cell
+            # Highlight the selected cell.
             if selected_cell == (row, col):
                 pygame.draw.rect(screen, HIGHLIGHT_COLOR, rect, 3)
 
@@ -73,8 +93,10 @@ def draw_board(screen, board: Board, selected_cell=None):
 def main():
     pygame.init()
 
-    # Set up the game configuration and initial state
+    # Set up the game configuration and initial state.
+    # Change num_players to any desired number.
     config = EnvConfig(
+        num_players=4,  # e.g., 4 players
         board_width=10,
         board_height=10,
         num_neutral_bases=4,
@@ -88,7 +110,7 @@ def main():
     state: EnvState = init_state(rng_key, config)
     assert_valid_state(state)
 
-    # Set up the display window
+    # Set up the display window.
     screen_width = config.board_width * CELL_SIZE
     screen_height = config.board_height * CELL_SIZE
     screen = pygame.display.set_mode((screen_width, screen_height))
@@ -103,20 +125,20 @@ def main():
             if event.type == pygame.QUIT:
                 running = False
 
-            # Handle mouse clicks
+            # Handle mouse clicks.
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 pos = pygame.mouse.get_pos()
                 col = pos[0] // CELL_SIZE
                 row = pos[1] // CELL_SIZE
                 if 0 <= row < config.board_height and 0 <= col < config.board_width:
-                    # Try to select the clicked cell
-                    if state.board.player_1_troops[row, col] > 1:
+                    # Let user select the cell only if player 0 has more than 1 troop there.
+                    if state.board.player_troops[0, row, col] > 1:
                         selected_cell = (row, col)
                     else:
                         selected_cell = None
 
             elif event.type == pygame.KEYDOWN:
-                # Handle keyboard arrow keys for moves
+                # Handle keyboard arrow keys for moves.
                 if selected_cell is not None:
                     if event.key == pygame.K_UP:
                         action = 0
@@ -131,28 +153,28 @@ def main():
                     else:
                         continue
 
+                    # Execute a move for player 0 (user-controlled) if an action is selected.
                     if action is not None:
                         sel_row, sel_col = selected_cell
-                        state = move(
-                            state, player=0, x=sel_col, y=sel_row, action=action
+                        state = move(state, player=0, x=sel_col, y=sel_row, action=action)
+
+                    # For every opponent (players 1 to n-1), perform a random move.
+                    for agent in range(1, config.num_players):
+                        legal_actions_mask = get_legal_moves(state, agent)
+                        legal_actions, num_actions = fixed_argwhere(
+                            legal_actions_mask,
+                            max_actions=state.board.width * state.board.height * 4,
                         )
+                        rng_key, subkey = jax.random.split(rng_key)
+                        action_idx = jax.random.randint(subkey, (), 0, num_actions)
+                        action_random = jnp.take(legal_actions, action_idx, axis=0)
+                        state = move(state, agent, action_random[1], action_random[0], action_random[2])
 
-                    # perform move for opponent
-                    legal_actions_mask = get_legal_moves(state, 1)
-                    legal_actions, num_actions = fixed_argwhere(
-                        legal_actions_mask,
-                        max_actions=state.board.width * state.board.height * 4,
-                    )
-                    rng_key, subkey = jax.random.split(rng_key)
-                    action_idx = jax.random.randint(subkey, (), 0, num_actions)
-                    action = jnp.take(legal_actions, action_idx, axis=0)
-                    state = move(state, 1, action[1], action[0], action[2])
-
-                    # Reinforce troops for both players
+                    # Reinforce troops for all players.
                     state = reinforce_troops(state, config)
                     selected_cell = None
 
-        # Render the updated board
+        # Render the updated board.
         screen.fill(BACKGROUND_COLOR)
         draw_board(screen, state.board, selected_cell)
         pygame.display.flip()
