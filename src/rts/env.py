@@ -102,66 +102,65 @@ def move(
     target_x = jnp.where(action == 1, x + 1, jnp.where(action == 3, x - 1, x))
     target_y = jnp.where(action == 0, y - 1, jnp.where(action == 2, y + 1, y))
 
-    # Check if the move is valid
-    source_in_bounds = jnp.logical_and(x >= 0, x < board.width) & jnp.logical_and(
-        y >= 0, y < board.height
-    )
-    target_in_bounds = jnp.logical_and(
-        target_y >= 0, target_y < board.height
-    ) & jnp.logical_and(target_x >= 0, target_x < board.width)
+    # Check move validity.
+    source_in_bounds = jnp.logical_and(x >= 0, x < board.width) & jnp.logical_and(y >= 0, y < board.height)
+    target_in_bounds = jnp.logical_and(target_y >= 0, target_y < board.height) & jnp.logical_and(target_x >= 0, target_x < board.width)
     has_enough_troops = player_troops[y, x] > 1
     valid_move = source_in_bounds & target_in_bounds & has_enough_troops
 
-    # Compute attacking troops
+    # Number of attacking troops leaving the source (keep one behind).
     num_attacking_troops = player_troops[y, x] - 1
 
-    # Gather enemy and neutral information at target cell
     enemy_counts = board.player_troops[:, target_y, target_x]
     mask = jnp.not_equal(jnp.arange(num_players), player)
     sum_enemy = jnp.sum(enemy_counts * mask.astype(jnp.int32))
     neutral_count = board.neutral_troops[target_y, target_x]
     total_enemy = sum_enemy + neutral_count
 
-    # Compute the damage distribution if the move is valid
-    damage_ratio = jnp.where(total_enemy > 0, num_attacking_troops / total_enemy, 0)
-    damage_enemies = jnp.where(mask, jnp.floor(enemy_counts * damage_ratio), 0)
-    damage_neutral = jnp.where(
-        total_enemy > 0, jnp.floor(neutral_count * damage_ratio), 0
+    damage = jnp.minimum(num_attacking_troops, total_enemy)
+    surviving_attackers = num_attacking_troops - damage
+
+    # Reduce enemy troops proportionally.
+    new_enemy_counts = jnp.where(
+        total_enemy > 0,
+        enemy_counts - (enemy_counts / total_enemy) * damage,
+        enemy_counts,
     )
+    new_enemy_counts = jnp.floor(new_enemy_counts)  # convert to integer counts
 
-    new_enemy_counts = jnp.maximum(0, enemy_counts - damage_enemies)
-    new_neutral = jnp.maximum(0, neutral_count - damage_neutral)
-
-    total_damage = jnp.sum(damage_enemies) + damage_neutral
-    remaining_attacking_troops = jnp.maximum(0, num_attacking_troops - total_damage)
-
-    # Update target cell for moving player
-    new_moving_player_count = (
-        player_troops[target_y, target_x] + remaining_attacking_troops
+    new_neutral = jnp.where(
+        total_enemy > 0,
+        neutral_count - (neutral_count / total_enemy) * damage,
+        neutral_count,
     )
+    new_neutral = jnp.floor(new_neutral)
 
-    # Create a new target cell vector: update the moving player's cell and keep others updated as per new_enemy_counts
+    # Update the moving player's count at the target cell.
+    new_moving_player_count = board.player_troops[player, target_y, target_x] + surviving_attackers
+
+    # Construct new target cell vector: for the moving player, use new_moving_player_count;
+    # for all other players, use the updated enemy counts.
     new_target_troops = jnp.where(
-        jnp.arange(num_players) == player, new_moving_player_count, new_enemy_counts
+        jnp.arange(num_players) == player,
+        new_moving_player_count,
+        new_enemy_counts,
     )
 
-    # Update troops for the moving player source and target cell (if valid)
-    player_troops = board.player_troops
-    player_troops = player_troops.at[player, y, x].set(
-        jnp.where(valid_move, 1, player_troops[player, y, x])
+    # Update the board arrays (only if the move is valid).
+    updated_player_troops = board.player_troops
+    updated_player_troops = updated_player_troops.at[player, y, x].set(
+        jnp.where(valid_move, 1, board.player_troops[player, y, x])
     )
-    player_troops = player_troops.at[:, target_y, target_x].set(
-        jnp.where(valid_move, new_target_troops, player_troops[:, target_y, target_x])
+    updated_player_troops = updated_player_troops.at[:, target_y, target_x].set(
+        jnp.where(valid_move, new_target_troops, board.player_troops[:, target_y, target_x])
     )
-
-    # Update neutral troops at target cell
-    new_neutral_troops = board.neutral_troops.at[target_y, target_x].set(
+    updated_neutral_troops = board.neutral_troops.at[target_y, target_x].set(
         jnp.where(valid_move, new_neutral, board.neutral_troops[target_y, target_x])
     )
 
     new_board = board.replace(
-        player_troops=player_troops,
-        neutral_troops=new_neutral_troops,
+        player_troops=updated_player_troops,
+        neutral_troops=updated_neutral_troops,
     )
 
     return EnvState(board=new_board, time=state.time)
