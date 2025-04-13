@@ -8,7 +8,7 @@ import jax.lax
 import jax.numpy as jnp
 
 from src.rts.config import EnvConfig
-from src.rts.env import init_state, is_done, p1_step
+from src.rts.env import init_state, is_done, p1_step, random_move
 from src.rts.utils import get_legal_moves, fixed_argwhere
 
 
@@ -67,12 +67,7 @@ def single_rollout(
         # choose the action with the highest Q-value that is also legal
         q_net_action = jnp.argmax((logits + 1000) * legal_mask)
         # epsilon-greedy exploration
-        legal_actions, num_actions = fixed_argwhere(
-            legal_mask, max_actions=state.board.width * state.board.height * 4
-        )
-        rng_key, subkey = jax.random.split(rng_key)
-        action_idx = jax.random.randint(subkey, (), 0, num_actions)
-        explore_action = jnp.take(legal_actions, action_idx, axis=0)[0]
+        explore_action = random_move(state, 0, rng_key)[0]
 
         action = jax.lax.cond(
             jax.random.bernoulli(rng_key, params.epsilon),
@@ -267,6 +262,7 @@ if __name__ == "__main__":
     width = 10
     height = 10
     config = EnvConfig(
+        num_players=2,
         board_width=width,
         board_height=height,
         num_neutral_bases=3,

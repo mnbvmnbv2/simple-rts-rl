@@ -3,6 +3,7 @@ from flax import struct
 
 @struct.dataclass
 class EnvConfig:
+    num_players: int
     board_width: int
     board_height: int
     num_neutral_bases: int

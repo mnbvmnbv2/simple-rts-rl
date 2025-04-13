@@ -5,25 +5,27 @@ from flax import struct
 
 @struct.dataclass
 class Board:
-    player_1_troops: jnp.ndarray  # shape: (width, height) of int
-    player_2_troops: jnp.ndarray  # shape: (width, height) of int
-    neutral_troops: jnp.ndarray  # shape: (width, height) of int
-    bases: jnp.ndarray  # shape: (width, height) of bool
+    player_troops: jnp.ndarray  # (player, width, height) of int
+    neutral_troops: jnp.ndarray  # (width, height) of int
+    bases: jnp.ndarray  # (width, height) of bool
+
+    @property
+    def num_players(self) -> int:
+        return self.player_troops.shape[0]
 
     @property
     def width(self) -> int:
-        return self.player_1_troops.shape[1]
+        return self.player_troops.shape[2]
 
     @property
     def height(self) -> int:
-        return self.player_1_troops.shape[0]
+        return self.player_troops.shape[1]
 
     @jax.jit
     def flatten(self):
         return jnp.concatenate(
             [
-                self.player_1_troops.flatten(),
-                self.player_2_troops.flatten(),
+                self.player_troops.flatten(),
                 self.neutral_troops.flatten(),
                 self.bases.flatten(),
             ]

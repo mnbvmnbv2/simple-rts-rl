@@ -8,20 +8,17 @@ from src.rts.env import EnvState
 def assert_valid_state(state: EnvState) -> None:
     board = state.board
     # Check types
-    chex.assert_type(state.board.player_1_troops, jnp.integer)
-    chex.assert_type(board.player_2_troops, jnp.integer)
+    chex.assert_type(state.board.player_troops, jnp.integer)
     chex.assert_type(board.neutral_troops, jnp.integer)
     chex.assert_type(board.bases, jnp.bool)
 
     # Check that all values are non-negative.
-    assert jnp.all(board.player_1_troops >= 0), "Negative player 1 troops"
-    assert jnp.all(board.player_2_troops >= 0), "Negative player 2 troops"
+    assert jnp.all(board.player_troops >= 0), "Negative player troops"
     assert jnp.all(board.neutral_troops >= 0), "Negative neutral troops"
 
     # Check that no tile has troops from multiple players (only one channel from 0 to 2 can be over 0).
     troop_presence = (
-        (board.player_1_troops > 0).astype(jnp.int32)
-        + (board.player_2_troops > 0).astype(jnp.int32)
+        (board.player_troops > 0).astype(jnp.int32)  # FIXME
         + (board.neutral_troops > 0).astype(jnp.int32)
     )
     assert jnp.all(troop_presence <= 1), "Some tiles have troops from multiple players."
@@ -34,7 +31,7 @@ def assert_valid_state(state: EnvState) -> None:
 def get_legal_moves(state: EnvState, player: int) -> jnp.ndarray:
     board = state.board
     # Select the troop array for the given player.
-    troop_array = jnp.where(player == 0, board.player_1_troops, board.player_2_troops)
+    troop_array = board.player_troops[player]
 
     # A move is only legal if the source cell has more than 1 troop.
     active = troop_array > 1
