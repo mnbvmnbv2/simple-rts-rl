@@ -7,6 +7,7 @@ from src.rts.env import EnvState, reinforce_troops, init_state, move
 @pytest.fixture
 def config():
     return EnvConfig(
+        num_players=2,
         board_width=10,
         board_height=10,
         num_neutral_bases=4,

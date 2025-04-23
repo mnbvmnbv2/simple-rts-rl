@@ -5,12 +5,17 @@ from src.rts.env import Board, EnvState, reward_function
 def create_test_state(p1, p2, neutral, bases, time=5):
     """
     Helper function to create an EnvState from lists.
-    p1, p2, neutral: 2D lists of ints (4x4) for player1, player2, and neutral troops.
-    bases: 2D list of booleans (4x4) indicating base positions.
+
+    p1, p2, neutral: 2D lists (4x4) of ints representing the troops
+                      for player 1, player 2 and the neutral troops.
+    bases: 2D list (4x4) of booleans indicating base positions.
+
+    The function stacks p1 and p2 to form the combined `player_troops` array.
     """
     board = Board(
-        player_1_troops=jnp.array(p1, dtype=jnp.int32),
-        player_2_troops=jnp.array(p2, dtype=jnp.int32),
+        player_troops=jnp.stack(
+            [jnp.array(p1, dtype=jnp.int32), jnp.array(p2, dtype=jnp.int32)], axis=0
+        ),
         neutral_troops=jnp.array(neutral, dtype=jnp.int32),
         bases=jnp.array(bases, dtype=bool),
     )
@@ -22,28 +27,26 @@ def test_reward_capture_tile():
     Test +1 reward for each captured tile.
     Player 1 captures one new tile.
     """
-    # Initial state: p1 has one tile at (0,0)
+    # Initial state: player 1 (index 0) has one tile at (0,0)
     p1_initial = [
         [3, 0, 0, 0],
         [0, 0, 0, 0],
         [0, 0, 0, 0],
         [0, 0, 0, 0],
     ]
-    # Final state: p1 has two tiles at (0,0) and (0,1)
+    # Final state: player 1 now has two tiles at (0,0) and (0,1)
     p1_final = [
         [1, 2, 0, 0],
         [0, 0, 0, 0],
         [0, 0, 0, 0],
         [0, 0, 0, 0],
     ]
-
     p2 = [[0] * 4 for _ in range(4)]
     neutral = [[0] * 4 for _ in range(4)]
     bases = [[False] * 4 for _ in range(4)]
 
     state = create_test_state(p1_initial, p2, neutral, bases)
     next_state = create_test_state(p1_final, p2, neutral, bases)
-
     reward = reward_function(state, next_state, player=0)
     assert reward == 1, "Expected +1 reward for capturing one new tile"
 
@@ -53,28 +56,26 @@ def test_reward_lose_tile():
     Test -1 penalty for each lost tile.
     Player 1 loses one tile.
     """
-    # Initial state: p1 has two tiles
+    # Initial state: player 1 has two tiles
     p1_initial = [
         [3, 2, 0, 0],
         [0, 0, 0, 0],
         [0, 0, 0, 0],
         [0, 0, 0, 0],
     ]
-    # Final state: p1 has only one tile
+    # Final state: player 1 now has only one tile
     p1_final = [
         [3, 0, 0, 0],
         [0, 0, 0, 0],
         [0, 0, 0, 0],
         [0, 0, 0, 0],
     ]
-
     p2 = [[0] * 4 for _ in range(4)]
     neutral = [[0] * 4 for _ in range(4)]
     bases = [[False] * 4 for _ in range(4)]
 
     state = create_test_state(p1_initial, p2, neutral, bases)
     next_state = create_test_state(p1_final, p2, neutral, bases)
-
     reward = reward_function(state, next_state, player=0)
     assert reward == -1, "Expected -1 penalty for losing one tile"
 
@@ -83,21 +84,20 @@ def test_reward_capture_base():
     """
     Test +10 reward for capturing a base.
     """
-    # Initial state: p1 has one tile, no base
+    # Initial state: player 1 has a tile but none is a base
     p1_initial = [
         [3, 0, 0, 0],
         [0, 0, 0, 0],
         [0, 0, 0, 0],
         [0, 0, 0, 0],
     ]
-    # Final state: p1 has two tiles, one is a base
+    # Final state: player 1 gains a new tile at (0,1) which is a base
     p1_final = [
         [1, 2, 0, 0],
         [0, 0, 0, 0],
         [0, 0, 0, 0],
         [0, 0, 0, 0],
     ]
-
     p2 = [[0] * 4 for _ in range(4)]
     neutral = [[0] * 4 for _ in range(4)]
     bases = [
@@ -109,9 +109,8 @@ def test_reward_capture_base():
 
     state = create_test_state(p1_initial, p2, neutral, bases)
     next_state = create_test_state(p1_final, p2, neutral, bases)
-
     reward = reward_function(state, next_state, player=0)
-    # +1 for new tile, +10 for capturing base
+    # Expect +1 for the new tile and +10 for capturing a base
     assert reward == 11, "Expected +11 reward for capturing a tile with a base"
 
 
@@ -119,21 +118,20 @@ def test_reward_lose_base():
     """
     Test -10 penalty for losing a base.
     """
-    # Initial state: p1 has two tiles, one is a base
+    # Initial state: player 1 has two tiles, one is a base
     p1_initial = [
         [3, 2, 0, 0],
         [0, 0, 0, 0],
         [0, 0, 0, 0],
         [0, 0, 0, 0],
     ]
-    # Final state: p1 has one tile, no base
+    # Final state: player 1 loses the base (only one tile remains)
     p1_final = [
         [3, 0, 0, 0],
         [0, 0, 0, 0],
         [0, 0, 0, 0],
         [0, 0, 0, 0],
     ]
-
     p2 = [[0] * 4 for _ in range(4)]
     neutral = [[0] * 4 for _ in range(4)]
     bases = [
@@ -145,9 +143,8 @@ def test_reward_lose_base():
 
     state = create_test_state(p1_initial, p2, neutral, bases)
     next_state = create_test_state(p1_final, p2, neutral, bases)
-
     reward = reward_function(state, next_state, player=0)
-    # -1 for lost tile, -10 for lost base
+    # Expected: -1 for the lost tile and -10 for losing the base
     assert reward == -11, "Expected -11 penalty for losing a tile with a base"
 
 
@@ -155,7 +152,7 @@ def test_reward_defeat_opponent():
     """
     Test +100 reward for defeating the opponent.
     """
-    # Initial state: p1 and p2 each have tiles
+    # Initial state: both players have some tiles
     p1_initial = [
         [3, 0, 0, 0],
         [0, 0, 0, 0],
@@ -168,8 +165,7 @@ def test_reward_defeat_opponent():
         [0, 0, 0, 0],
         [0, 0, 0, 0],
     ]
-
-    # Final state: p2 has no tiles left
+    # Final state: opponent (player 2) has no tiles left
     p1_final = [
         [2, 0, 0, 0],
         [0, 1, 0, 0],
@@ -182,15 +178,13 @@ def test_reward_defeat_opponent():
         [0, 0, 0, 0],
         [0, 0, 0, 0],
     ]
-
     neutral = [[0] * 4 for _ in range(4)]
     bases = [[False] * 4 for _ in range(4)]
 
     state = create_test_state(p1_initial, p2_initial, neutral, bases)
     next_state = create_test_state(p1_final, p2_final, neutral, bases)
-
     reward = reward_function(state, next_state, player=0)
-    # +1 for new tile, +100 for victory
+    # +1 for the new tile and +100 for defeating the opponent
     assert (
         reward == 101
     ), "Expected +101 reward for defeating opponent and capturing new tile"
@@ -200,7 +194,7 @@ def test_reward_player_defeated():
     """
     Test -100 penalty for being defeated.
     """
-    # Initial state: p1 and p2 each have tiles
+    # Initial state: both players have tiles
     p1_initial = [
         [2, 0, 0, 0],
         [0, 0, 0, 0],
@@ -213,8 +207,7 @@ def test_reward_player_defeated():
         [0, 0, 0, 0],
         [0, 0, 0, 0],
     ]
-
-    # Final state: p1 has no tiles left
+    # Final state: player 1 loses all tiles
     p1_final = [
         [0, 0, 0, 0],
         [0, 0, 0, 0],
@@ -227,15 +220,13 @@ def test_reward_player_defeated():
         [0, 0, 0, 0],
         [0, 0, 0, 0],
     ]
-
     neutral = [[0] * 4 for _ in range(4)]
     bases = [[False] * 4 for _ in range(4)]
 
     state = create_test_state(p1_initial, p2_initial, neutral, bases)
     next_state = create_test_state(p1_final, p2_final, neutral, bases)
-
     reward = reward_function(state, next_state, player=0)
-    # -1 for lost tile, -100 for defeat
+    # -1 for lost tile and -100 penalty for being defeated
     assert reward == -101, "Expected -101 penalty for being defeated"
 
 
@@ -257,8 +248,7 @@ def test_reward_complex_scenario():
         [0, 0, 0, 0],
         [0, 0, 0, 0],
     ]
-
-    # Final state: p1 gained (0,1) with base, gained (1,1) but lost (0,2)
+    # Final state: player 1 gains (0,1) with base and (1,1) but loses (0,2)
     p1_final = [
         [2, 1, 0, 0],
         [0, 1, 0, 0],
@@ -271,7 +261,6 @@ def test_reward_complex_scenario():
         [0, 0, 0, 0],
         [0, 0, 0, 0],
     ]
-
     neutral = [[0] * 4 for _ in range(4)]
     bases = [
         [False, True, False, False],
@@ -282,9 +271,8 @@ def test_reward_complex_scenario():
 
     state = create_test_state(p1_initial, p2_initial, neutral, bases)
     next_state = create_test_state(p1_final, p2_final, neutral, bases)
-
     reward = reward_function(state, next_state, player=0)
-    # +2 for two new tiles, -1 for one lost tile, +10 for captured base
+    # Expected: +2 for two new tiles, -1 for one lost tile, and +10 for the captured base
     assert reward == 11, "Expected +11 reward for complex scenario"
 
 
@@ -304,12 +292,9 @@ def test_reward_no_change():
         [0, 0, 0, 0],
         [0, 0, 0, 0],
     ]
-
     neutral = [[0] * 4 for _ in range(4)]
     bases = [[False] * 4 for _ in range(4)]
-
     state = create_test_state(p1, p2, neutral, bases)
-
     reward = reward_function(state, state, player=0)
     assert reward == 0, "Expected 0 reward when state doesn't change"
 
@@ -331,8 +316,7 @@ def test_reward_for_player_two():
         [0, 0, 0, 0],
         [0, 0, 0, 0],
     ]
-
-    # Final state: p2 captured a base from p1
+    # Final state: player 2 captures a base from player 1
     p1_final = [
         [0, 0, 0, 0],
         [0, 0, 0, 0],
@@ -345,7 +329,6 @@ def test_reward_for_player_two():
         [0, 0, 0, 0],
         [0, 0, 0, 0],
     ]
-
     neutral = [[0] * 4 for _ in range(4)]
     bases = [
         [True, False, False, False],
@@ -356,7 +339,6 @@ def test_reward_for_player_two():
 
     state = create_test_state(p1_initial, p2_initial, neutral, bases)
     next_state = create_test_state(p1_final, p2_final, neutral, bases)
-
     reward = reward_function(state, next_state, player=1)
-    # +1 for new tile, +10 for captured base, +100 for victory
+    # Expect: +1 for the new tile, +10 for the captured base, and +100 for victory
     assert reward == 111, "Expected +111 reward for player 2"

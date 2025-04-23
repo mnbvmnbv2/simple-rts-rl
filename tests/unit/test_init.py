@@ -11,6 +11,7 @@ from src.rts.utils import assert_valid_state
     "config",
     [
         EnvConfig(
+            num_players=2,
             board_width=10,
             board_height=10,
             num_neutral_bases=4,
@@ -21,6 +22,7 @@ from src.rts.utils import assert_valid_state
             bonus_time=10,
         ),
         EnvConfig(
+            num_players=3,
             board_width=20,
             board_height=20,
             num_neutral_bases=4,
@@ -31,6 +33,7 @@ from src.rts.utils import assert_valid_state
             bonus_time=10,
         ),
         EnvConfig(
+            num_players=4,
             board_width=12,
             board_height=47,
             num_neutral_bases=9,
@@ -41,6 +44,7 @@ from src.rts.utils import assert_valid_state
             bonus_time=10,
         ),
         EnvConfig(
+            num_players=2,
             board_width=5,
             board_height=5,
             num_neutral_bases=2,
@@ -65,6 +69,7 @@ def test_init_state_minimal_board():
     For a 3x3 board and parameters chosen so that 2 (players) + num_neutral_bases + num_neutral_troops_start equals 9.
     """
     config = EnvConfig(
+        num_players=2,
         board_width=3,
         board_height=3,
         num_neutral_bases=2,

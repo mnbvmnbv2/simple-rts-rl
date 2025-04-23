@@ -10,6 +10,7 @@ def test_random_sequence_validity():
     Run a sequence of moves (both players) on a small board to ensure the state remains valid.
     """
     config = EnvConfig(
+        num_players=2,
         board_width=5,
         board_height=5,
         num_neutral_bases=2,
