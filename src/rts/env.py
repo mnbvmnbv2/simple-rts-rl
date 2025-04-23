@@ -3,7 +3,7 @@ from functools import partial
 import jax
 import jax.numpy as jnp
 
-from src.rts.config import EnvConfig
+from src.rts.config import EnvConfig, RewardConfig
 from src.rts.state import Board, EnvState
 from src.rts.utils import get_legal_moves, fixed_argwhere
 
@@ -103,8 +103,12 @@ def move(
     target_y = jnp.where(action == 0, y - 1, jnp.where(action == 2, y + 1, y))
 
     # Check move validity.
-    source_in_bounds = jnp.logical_and(x >= 0, x < board.width) & jnp.logical_and(y >= 0, y < board.height)
-    target_in_bounds = jnp.logical_and(target_y >= 0, target_y < board.height) & jnp.logical_and(target_x >= 0, target_x < board.width)
+    source_in_bounds = jnp.logical_and(x >= 0, x < board.width) & jnp.logical_and(
+        y >= 0, y < board.height
+    )
+    target_in_bounds = jnp.logical_and(
+        target_y >= 0, target_y < board.height
+    ) & jnp.logical_and(target_x >= 0, target_x < board.width)
     has_enough_troops = player_troops[y, x] > 1
     valid_move = source_in_bounds & target_in_bounds & has_enough_troops
 
@@ -136,7 +140,9 @@ def move(
     new_neutral = jnp.floor(new_neutral)
 
     # Update the moving player's count at the target cell.
-    new_moving_player_count = board.player_troops[player, target_y, target_x] + surviving_attackers
+    new_moving_player_count = (
+        board.player_troops[player, target_y, target_x] + surviving_attackers
+    )
 
     # Construct new target cell vector: for the moving player, use new_moving_player_count;
     # for all other players, use the updated enemy counts.
@@ -152,7 +158,9 @@ def move(
         jnp.where(valid_move, 1, board.player_troops[player, y, x])
     )
     updated_player_troops = updated_player_troops.at[:, target_y, target_x].set(
-        jnp.where(valid_move, new_target_troops, board.player_troops[:, target_y, target_x])
+        jnp.where(
+            valid_move, new_target_troops, board.player_troops[:, target_y, target_x]
+        )
     )
     updated_neutral_troops = board.neutral_troops.at[target_y, target_x].set(
         jnp.where(valid_move, new_neutral, board.neutral_troops[target_y, target_x])
@@ -195,59 +203,79 @@ def reinforce_troops(
     return EnvState(board=new_board, time=time)
 
 
-@jax.jit
+def _tile_changes(mask_cur, mask_nxt):
+    cur = jnp.sum(mask_cur)
+    nxt = jnp.sum(mask_nxt)
+    gain = jnp.maximum(nxt - cur, 0)
+    loss = jnp.maximum(cur - nxt, 0)
+    return gain, loss
+
+
+def _base_changes(player_mask_cur, player_mask_nxt, base_mask):
+    return _tile_changes(player_mask_cur & base_mask, player_mask_nxt & base_mask)
+
+
+def _neutral_changes(neu_cur, neu_nxt, player_cur, player_nxt):
+    gain = jnp.sum(neu_cur & (~neu_nxt) & player_nxt)  # neutral → player
+    loss = jnp.sum((~neu_cur) & neu_nxt & player_cur)  # player  → neutral
+    return gain, loss
+
+
+@partial(jax.jit, static_argnames=("config",))
 def reward_function(
-    state: EnvState,
-    next_state: EnvState,
-    player: int,
+    state, next_state, player: int, config: RewardConfig
 ) -> jnp.ndarray:
-    """
-    Rewards:
-        - +1 reward if captured new tile
-        - +10 reward if captured base
-        - +100 reward if defeatued opponent
+    """Per-step reward for `player`, parameterised by `config`."""
 
-    Penalties:
-        - -1 if lost tile
-        - -10 if lost base
-        - -100 if defeated
-    """
-    # Get player and opponent troops arrays
-    player_troops_current = state.board.player_troops[player]
-    player_troops_next = next_state.board.player_troops[player]
+    # ------------ Layers -----------------------------------------------------
+    p_cur = state.board.player_troops[player]
+    p_nxt = next_state.board.player_troops[player]
 
-    opponent_troops_current = (
-        jnp.sum(state.board.player_troops, axis=0) - player_troops_current
-    )
-    opponent_troops_next = (
-        jnp.sum(next_state.board.player_troops, axis=0) - player_troops_next
-    )
+    opp_cur = jnp.sum(state.board.player_troops, axis=0) - p_cur
+    opp_nxt = jnp.sum(next_state.board.player_troops, axis=0) - p_nxt
 
-    # Calculate tile changes
-    player_tiles_current = jnp.sum(player_troops_current > 0)
-    player_tiles_next = jnp.sum(player_troops_next > 0)
-    tiles_change = player_tiles_next - player_tiles_current
+    base_mask = state.board.bases  # (h, w) bool
 
-    # Calculate base changes
-    player_bases_current = jnp.sum((player_troops_current > 0) & state.board.bases)
-    player_bases_next = jnp.sum((player_troops_next > 0) & next_state.board.bases)
-    bases_change = player_bases_next - player_bases_current
+    n_cur = state.board.neutral_troops
+    n_nxt = next_state.board.neutral_troops
+    neu_cur = n_cur > 0
+    neu_nxt = n_nxt > 0
 
-    # Check for victory/defeat
-    opponent_tiles_current = jnp.sum(opponent_troops_current > 0)
-    opponent_tiles_next = jnp.sum(opponent_troops_next > 0)
+    # ------------ Changes ----------------------------------------------------
+    tile_gain, tile_loss = _tile_changes(p_cur > 0, p_nxt > 0)
+    base_gain, base_loss = _base_changes(p_cur > 0, p_nxt > 0, base_mask)
+    neut_gain, neut_loss = _neutral_changes(neu_cur, neu_nxt, p_cur > 0, p_nxt > 0)
+    opp_tgain, opp_tloss = _tile_changes(opp_cur > 0, opp_nxt > 0)
+    opp_bgain, opp_bloss = _base_changes(opp_cur > 0, opp_nxt > 0, base_mask)
 
-    victory = jnp.logical_and(
-        opponent_tiles_current > 0, opponent_tiles_next == 0
-    ).astype(jnp.int32)
-    defeat = jnp.logical_and(player_tiles_current > 0, player_tiles_next == 0).astype(
-        jnp.int32
-    )
+    # ------------ Victory / defeat ------------------------------------------
+    opp_tiles_cur = jnp.sum(opp_cur > 0)
+    opp_tiles_nxt = jnp.sum(opp_nxt > 0)
 
-    # Calculate total reward
-    total_reward = tiles_change + 10 * bases_change + 100 * victory - 100 * defeat
+    victory = ((opp_tiles_cur > 0) & (opp_tiles_nxt == 0)).astype(jnp.int32)
+    defeat = ((tile_gain + tile_loss > 0) & (jnp.sum(p_nxt > 0) == 0)).astype(jnp.int32)
 
-    return total_reward
+    # ------------ Weighted sum ----------------------------------------------
+    reward = (
+        # player tiles / bases
+        tile_gain * config.tile_gain_reward
+        + tile_loss * config.tile_loss_reward
+        + base_gain * config.base_gain_reward
+        + base_loss * config.base_loss_reward
+        # neutral conversions
+        + neut_gain * config.neutral_tile_gain_reward
+        # opponent territory
+        + opp_tloss * config.opponent_tile_loss_reward
+        + opp_tgain * config.opponent_tile_gain_reward
+        # opponent bases  (NEW)
+        + opp_bloss * config.opponent_base_loss_reward
+        + opp_bgain * config.opponent_base_gain_reward
+        # end-of-game
+        + victory * config.victory_reward
+        + defeat * config.defeat_reward
+    ).astype(jnp.float32)
+
+    return reward
 
 
 @jax.jit
