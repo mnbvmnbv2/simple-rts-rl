@@ -339,5 +339,5 @@ def p1_step(
     )
 
     next_state = reinforce_troops(new_state, config)
-    reward_p1 = reward_function(state, next_state, 0)
+    reward_p1 = reward_function(state, next_state, 0, config.reward_config)
     return next_state, reward_p1

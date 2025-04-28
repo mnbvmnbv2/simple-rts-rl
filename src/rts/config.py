@@ -27,3 +27,4 @@ class EnvConfig:
     neutral_troops_max: int
     player_start_troops: int
     bonus_time: int
+    reward_config: RewardConfig = RewardConfig()
