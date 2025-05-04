@@ -19,4 +19,8 @@ dependencies = [
     "pygame>=2.6.1",
     "optax>=0.2.4",
     "distinctipy>=1.3.4",
+    "carbs",
 ]
+
+[tool.uv.sources]
+carbs = { git = "https://github.com/imbue-ai/carbs" }
