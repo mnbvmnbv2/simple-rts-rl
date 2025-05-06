@@ -42,12 +42,13 @@ class Model(nnx.Module):
         return self.lin_out(x)
 
 
-@functools.partial(nnx.jit, static_argnums=(1, 3))
+@functools.partial(nnx.jit, static_argnames=("config", "num_steps"))
 def single_rollout(
     rng_key,
     config: EnvConfig,
     model: Model,
-    params: Params,
+    num_steps: int,
+    epsilon: float,
 ):
     state = init_state(rng_key, config)
 
@@ -73,7 +74,7 @@ def single_rollout(
         explore_action = random_move(state, 0, rng_key)[0]
 
         action = jax.lax.cond(
-            jax.random.bernoulli(rng_key, params.epsilon),
+            jax.random.bernoulli(rng_key, epsilon),
             lambda _: explore_action,
             lambda _: q_net_action,
             operand=None,
@@ -103,7 +104,7 @@ def single_rollout(
         policy_step,
         (state, jnp.array(False), rng_key, jnp.array(0.0)),
         None,
-        params.num_steps,
+        num_steps,
     )
     obs_buffer, actions_buffer, rewards_buffer, done_buffer, next_obs_buffer = scan_out
     return (
@@ -116,13 +117,14 @@ def single_rollout(
     )
 
 
-@functools.partial(nnx.jit, static_argnums=(4,))
+@nnx.jit
 def q_lambda_return(
     q_net: Model,
     rewards_buffer: jnp.ndarray,
     done_buffer: jnp.ndarray,
     next_obs_buffer: jnp.ndarray,
-    params: Params,
+    gamma: float,
+    q_lambda: float,
 ) -> jnp.ndarray:
     # Compute Q-values for the next observations via vectorized max.
     # This returns an array of shape (num_steps,)
@@ -130,9 +132,7 @@ def q_lambda_return(
 
     # For the final step, compute the return as:
     # returns[-1] = rewards[-1] + gamma * q_value[-1] * (1 - done[-1])
-    returns_last = rewards_buffer[-1] + params.gamma * q_values[-1] * (
-        1.0 - done_buffer[-1]
-    )
+    returns_last = rewards_buffer[-1] + gamma * q_values[-1] * (1.0 - done_buffer[-1])
 
     # For timesteps 0,...,num_steps-2 we use:
     # returns[t] = rewards[t] + gamma * (q_lambda * returns[t+1] +
@@ -145,9 +145,8 @@ def q_lambda_return(
     def scan_fn(next_return, inputs):
         reward, done, next_value = inputs
         nextnonterminal = 1.0 - done
-        current_return = reward + params.gamma * (
-            params.q_lambda * next_return
-            + (1 - params.q_lambda) * next_value * nextnonterminal
+        current_return = reward + gamma * (
+            q_lambda * next_return + (1 - q_lambda) * next_value * nextnonterminal
         )
         return current_return, current_return
 
@@ -195,8 +194,10 @@ def train_minibatched(
     params: Params,
 ) -> tuple[Model, list, list]:
     rng_key = jax.random.PRNGKey(0)
-    vmapped_rollout = jax.vmap(single_rollout, in_axes=(0, None, None, None))
-    vmapped_q_lambda_return = jax.vmap(q_lambda_return, in_axes=(None, 0, 0, 0, None))
+    vmapped_rollout = jax.vmap(single_rollout, in_axes=(0, None, None, None, None))
+    vmapped_q_lambda_return = jax.vmap(
+        q_lambda_return, in_axes=(None, 0, 0, 0, None, None)
+    )
     losses = []
     cum_returns = []
 
@@ -204,7 +205,13 @@ def train_minibatched(
         rng_keys = jax.random.split(rng_key, params.num_envs + 1)
         rng_key, rollout_keys = rng_keys[0], rng_keys[1:]
 
-        rollout = vmapped_rollout(rollout_keys, config, q_net, params)
+        rollout = vmapped_rollout(
+            rollout_keys,
+            config,
+            q_net,
+            params.num_steps,
+            params.epsilon,
+        )
         (
             obs_buffer,
             actions_buffer,
@@ -218,7 +225,12 @@ def train_minibatched(
         cum_returns.append(cum_return)
 
         returns = vmapped_q_lambda_return(
-            q_net, rewards_buffer, done_buffer, next_obs_buffer, params
+            q_net,
+            rewards_buffer,
+            done_buffer,
+            next_obs_buffer,
+            params.gamma,
+            params.q_lambda,
         )
 
         flat_observations = obs_buffer.reshape(-1, obs_buffer.shape[-1])
