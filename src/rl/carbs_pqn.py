@@ -38,11 +38,11 @@ param_spaces = [
         space=LogitSpace(),
         search_center=0.92,
     ),
-    Param(
-        name="num_envs",
-        space=LinearSpace(is_integer=True, min=1, max=5000, scale=100),
-        search_center=200,
-    ),
+    # Param(
+    #     name="num_envs",
+    #     space=LinearSpace(is_integer=True, min=1, max=5000, scale=100),
+    #     search_center=200,
+    # ),
     Param(
         name="update_epochs",
         space=LinearSpace(is_integer=True, min=1, max=8, scale=4),
@@ -120,7 +120,7 @@ while not stop:
         lr=sug["lr"],
         gamma=sug["gamma"],
         q_lambda=sug["q_lambda"],
-        num_envs=sug["num_envs"],
+        num_envs=200,  # sug["num_envs"],
         num_steps=250,
         update_epochs=sug["update_epochs"],
         num_minibatches=sug["num_minibatches"],
