@@ -48,3 +48,10 @@ or
 ## Playable
 
 `uv run python -m src.playable`
+
+## Training with PQN RL
+
+## Hyperparameter search
+
+Using CARBS. However, got error woth pytorch 2.6 so in load carbs we
+have to change weights_only=False in torch.load().
