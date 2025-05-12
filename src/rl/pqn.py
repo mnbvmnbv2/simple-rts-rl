@@ -6,10 +6,11 @@ import optax
 import jax
 import jax.lax
 import jax.numpy as jnp
+from tqdm import tqdm
 
 from src.rts.config import EnvConfig
 from src.rts.env import init_state, is_done, p1_step, random_move
-from src.rts.utils import get_legal_moves, fixed_argwhere
+from src.rts.utils import get_legal_moves
 
 
 @dataclass(frozen=True)
@@ -201,7 +202,7 @@ def train_minibatched(
     losses = []
     cum_returns = []
 
-    for iteration in range(params.num_iterations):
+    for iteration in tqdm(range(params.num_iterations)):
         rng_keys = jax.random.split(rng_key, params.num_envs + 1)
         rng_key, rollout_keys = rng_keys[0], rng_keys[1:]
 
@@ -221,7 +222,6 @@ def train_minibatched(
             cum_return,
         ) = rollout
 
-        print(f"Iteration {iteration} - Cumulative Return: {jnp.mean(cum_return)}")
         cum_returns.append(cum_return)
 
         returns = vmapped_q_lambda_return(
@@ -266,9 +266,6 @@ def train_minibatched(
                     minibatch_returns,
                 )
                 losses.append(loss)
-
-        if iteration % 10 == 0:
-            print(f"Iteration {iteration} - Loss: {loss}")
 
     return q_net, losses, cum_returns
 
