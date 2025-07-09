@@ -55,3 +55,7 @@ or
 
 Using CARBS. However, got error woth pytorch 2.6 so in load carbs we
 have to change weights_only=False in torch.load().
+
+## Mlflow
+
+`mlflow ui --port 5000`
