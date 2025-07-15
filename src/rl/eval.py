@@ -3,8 +3,8 @@ import jax.numpy as jnp
 from jax import lax
 
 from src.rts.config import EnvConfig
-from src.rts.env import init_state, p1_step
-from src.rts.utils import get_legal_moves
+from src.rts.env import init_state
+from src.rts.utils import get_legal_moves, p1_step
 from src.rl.pqn import Model
 
 

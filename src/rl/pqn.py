@@ -9,8 +9,8 @@ import jax.numpy as jnp
 from tqdm import tqdm
 
 from src.rts.config import EnvConfig
-from src.rts.env import init_state, is_done, p1_step, random_move
-from src.rts.utils import get_legal_moves
+from src.rts.env import init_state, is_done
+from src.rts.utils import get_legal_moves, p1_step, random_move
 
 
 @dataclass(frozen=True)
