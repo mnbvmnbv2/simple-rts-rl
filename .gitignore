@@ -126,3 +126,4 @@ cython_debug/
 
 mlruns
 checkpoints
+/outputs
