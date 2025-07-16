@@ -67,17 +67,31 @@ def main(cfg: DictConfig):
     mlflow.set_tracking_uri(cfg.MLFLOW_URI)
     mlflow.set_experiment(cfg.EXPERIMENT)
 
+    reward_config = RewardConfig(
+        tile_gain_reward=cfg.reward.tile_gain,
+        tile_loss_reward=cfg.reward.tile_loss,
+        base_gain_reward=cfg.reward.base_gain,
+        base_loss_reward=cfg.reward.base_loss,
+        victory_reward=cfg.reward.victory,
+        defeat_reward=cfg.reward.defeat,
+        neutral_tile_gain_reward=cfg.reward.neutral_tile_gain,
+        opponent_tile_loss_reward=cfg.reward.opponent_tile_loss,
+        opponent_tile_gain_reward=cfg.reward.opponent_tile_gain,
+        opponent_base_loss_reward=cfg.reward.opponent_base_loss,
+        opponent_base_gain_reward=cfg.reward.opponent_base_gain,
+    )
+
     config = EnvConfig(
-        num_players=2,
-        board_width=cfg.width,
-        board_height=cfg.height,
-        num_neutral_bases=3,
-        num_neutral_troops_start=5,
-        neutral_troops_min=4,
-        neutral_troops_max=10,
-        player_start_troops=5,
-        bonus_time=10,
-        reward_config=RewardConfig(),
+        num_players=cfg.env.num_players,
+        board_width=cfg.env.width,
+        board_height=cfg.env.height,
+        num_neutral_bases=cfg.env.num_neutral_bases,
+        num_neutral_troops_start=cfg.env.num_neutral_troops_start,
+        neutral_troops_min=cfg.env.neutral_troops_min,
+        neutral_troops_max=cfg.env.neutral_troops_max,
+        player_start_troops=cfg.env.player_start_troops,
+        bonus_time=cfg.env.bonus_time,
+        reward_config=reward_config,
     )
 
     trial_id = carbs.observation_count
@@ -98,9 +112,9 @@ def main(cfg: DictConfig):
 
         t0 = time.time()
         qnet = Model(
-            cfg.width * cfg.height * 4,
+            cfg.env.width * cfg.env.height * 4,
             512,
-            cfg.width * cfg.height * 4,
+            cfg.env.width * cfg.env.height * 4,
             rngs=nnx.Rngs(0),
         )
         opt = nnx.Optimizer(qnet, optax.adam(params.lr))

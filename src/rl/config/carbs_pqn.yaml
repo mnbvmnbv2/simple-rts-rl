@@ -1,5 +1,25 @@
 a: 4
 MLFLOW_URI: "file:./mlruns"
 EXPERIMENT: "carbs_indefinite"
-width: 10
-height: 10
+env:
+  width: 10
+  height: 10
+  num_players: 2
+  num_neutral_bases: 3
+  num_neutral_troops_start: 5
+  neutral_troops_min: 4
+  neutral_troops_max: 10
+  player_start_troops: 5
+  bonus_time: 10
+reward:
+  tile_gain: 1
+  tile_loss: -1
+  base_gain: 10
+  base_loss: -10
+  victory: 100
+  defeat: -100
+  neutral_tile_gain: 0
+  opponent_tile_gain: 0
+  opponent_tile_loss: 0
+  opponent_base_gain: 0
+  opponent_base_loss: 0
