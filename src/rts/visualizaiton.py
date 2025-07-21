@@ -1,4 +1,4 @@
-from typing import Sequence, Union
+from typing import Sequence
 import math
 import numpy as np
 import matplotlib.pyplot as plt
@@ -54,7 +54,7 @@ def _draw_one_board(ax, state: EnvState) -> None:
     ax.text(-0.5, -0.5, f"{state.time}", ha="center", va="center", color="purple")
 
 
-def visualize_board(states: Union[EnvState, Sequence[EnvState]]) -> None:
+def visualize_board(states: EnvState | Sequence[EnvState]) -> None:
     # Accept both a single state and an iterable of states transparently
     if isinstance(states, EnvState):
         states = [states]
