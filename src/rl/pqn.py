@@ -1,5 +1,6 @@
 import functools
 from dataclasses import dataclass
+import time
 
 from flax import nnx
 import optax
@@ -201,17 +202,23 @@ def train_minibatched(
     )
     losses = []
     cum_returns = []
+    times = {
+        "rng_split": [],
+        "rollout_ms": [],
+        "q_lambda_return_ms": [],
+        "reshape": [],
+        "update": [],
+    }
 
     for iteration in tqdm(range(params.num_iterations)):
+        split_pre = time.perf_counter()
         rng_keys = jax.random.split(rng_key, params.num_envs + 1)
         rng_key, rollout_keys = rng_keys[0], rng_keys[1:]
+        times["rng_split"].append(time.perf_counter() - split_pre)
 
+        rollout_pre = time.perf_counter()
         rollout = vmapped_rollout(
-            rollout_keys,
-            config,
-            q_net,
-            params.num_steps,
-            params.epsilon,
+            rollout_keys, config, q_net, params.num_steps, params.epsilon
         )
         (
             obs_buffer,
@@ -221,9 +228,11 @@ def train_minibatched(
             next_obs_buffer,
             cum_return,
         ) = rollout
+        times["rollout_ms"].append(time.perf_counter() - rollout_pre)
 
         cum_returns.append(cum_return)
 
+        q_lambda_return_pre = time.perf_counter()
         returns = vmapped_q_lambda_return(
             q_net,
             rewards_buffer,
@@ -232,14 +241,17 @@ def train_minibatched(
             params.gamma,
             params.q_lambda,
         )
+        times["q_lambda_return_ms"].append(time.perf_counter() - q_lambda_return_pre)
 
+        reshape_pre = time.perf_counter()
         flat_observations = obs_buffer.reshape(-1, obs_buffer.shape[-1])
         flat_actions = actions_buffer.reshape(-1)
         flat_returns = returns.reshape(-1)
-
         num_samples = flat_observations.shape[0]
         minibatch_size = num_samples // params.num_minibatches
+        times["reshape"].append(time.perf_counter() - reshape_pre)
 
+        update_pre = time.perf_counter()
         for epoch in range(params.update_epochs):
             rng_key, perm_key = jax.random.split(rng_key)
             permuted_indices = jax.random.permutation(perm_key, num_samples)
@@ -267,7 +279,9 @@ def train_minibatched(
                 )
                 losses.append(loss)
 
-    return q_net, losses, cum_returns
+        times["update"].append(time.perf_counter() - update_pre)
+
+    return q_net, losses, cum_returns, times
 
 
 if __name__ == "__main__":
