@@ -1,6 +1,7 @@
 import functools
 from dataclasses import dataclass
 import time
+from typing import NamedTuple
 
 from flax import nnx
 import optax
@@ -175,18 +176,104 @@ def train_step(
     observations: jnp.ndarray,
     actions: jnp.ndarray,
     returns: jnp.ndarray,
-) -> jnp.ndarray:
-    def loss_fn(q_net):
-        q_values = q_net(observations)
-        acted_q_values = jnp.take_along_axis(
-            q_values, actions[:, None], axis=1
-        ).squeeze()
-        return ((acted_q_values - returns) ** 2).mean()
+) -> tuple[Model, nnx.Optimizer, jnp.ndarray]:
+    def loss_fn(m) -> jnp.ndarray:
+        q_values = m(observations)
+        acted_q = jnp.take_along_axis(q_values, actions[:, None], axis=1).squeeze(-1)
+        return jnp.mean((acted_q - returns) ** 2)
 
     loss, grads = nnx.value_and_grad(loss_fn)(q_net)
     optimizer.update(grads)
+    return q_net, optimizer, loss
 
-    return loss
+
+vmapped_rollout = jax.vmap(single_rollout, in_axes=(0, None, None, None, None))
+vmapped_q_lambda_return = jax.vmap(q_lambda_return, in_axes=(None, 0, 0, 0, None, None))
+
+
+class TrainState(NamedTuple):
+    q_net: Model
+    opt: nnx.Optimizer
+    rng: jax.Array
+
+
+@functools.partial(nnx.jit, static_argnums=(1, 2))
+def _iteration_step(state: TrainState, config: EnvConfig, params: Params):
+    q_net, opt, rng = state
+
+    # --- rollout ---
+    rng, k_split = jax.random.split(rng)
+    keys = jax.random.split(k_split, params.num_envs)
+    obs_buf, act_buf, rew_buf, done_buf, next_obs_buf, cum_ret = vmapped_rollout(
+        keys, config, q_net, params.num_steps, params.epsilon
+    )
+    returns = vmapped_q_lambda_return(
+        q_net, rew_buf, done_buf, next_obs_buf, params.gamma, params.q_lambda
+    )
+
+    # --- flatten (N = num_envs * num_steps) ---
+    flat_obs = obs_buf.reshape(-1, obs_buf.shape[-1])  # [N, D]
+    flat_act = act_buf.reshape(-1)  # [N]
+    flat_ret = returns.reshape(-1)  # [N]
+
+    # --- static minibatch partition ---
+    num_samples = flat_obs.shape[0]
+    B = num_samples // params.num_minibatches
+    M = params.num_minibatches
+    num_full = M * B  # truncate remainder to keep shapes static
+
+    flat_obs = flat_obs[:num_full]
+    flat_act = flat_act[:num_full]
+    flat_ret = flat_ret[:num_full]
+
+    # ----- inner scan over minibatches -----
+    @nnx.scan
+    def scan_minibatches(carry_mb, xs_mb):
+        q_net, opt = carry_mb
+        mb_obs, mb_act, mb_ret = xs_mb  # each has leading axis B
+        q_net, opt, loss = train_step(q_net, opt, mb_obs, mb_act, mb_ret)
+        return (q_net, opt), loss
+
+    # ----- outer scan over epochs -----
+    @nnx.scan
+    def scan_epochs(carry, _):
+        q_net, opt, rng = carry
+        rng, k_perm = jax.random.split(rng)
+
+        # permutation & pre-gather to [M, B, ...]  (no indexing inside scan body)
+        perm = jax.random.permutation(k_perm, num_full).reshape(M, B)  # [M, B]
+
+        obs_mb = flat_obs[perm]  # [M, B, D]
+        act_mb = flat_act[perm]  # [M, B]
+        ret_mb = flat_ret[perm]  # [M, B]
+
+        # scan over minibatches (leading axis M)
+        (q_net, opt), losses = scan_minibatches(
+            (q_net, opt),
+            (obs_mb, act_mb, ret_mb),
+        )
+        # mean loss this epoch
+        return (q_net, opt, rng), jnp.mean(losses)
+
+    (q_net, opt, rng), epoch_losses = scan_epochs(
+        (q_net, opt, rng), jnp.arange(params.update_epochs)
+    )
+
+    metrics = {"loss": jnp.mean(epoch_losses), "cum_return": jnp.mean(cum_ret)}
+    return TrainState(q_net, opt, rng), metrics
+
+
+def train_minibatched_jitted(
+    q_net: Model, optimizer: nnx.Optimizer, config: EnvConfig, params: Params
+):
+    state = TrainState(q_net=q_net, opt=optimizer, rng=jax.random.PRNGKey(0))
+    losses = []
+    cum_returns = []
+    for _ in range(params.num_iterations):
+        state, metrics = _iteration_step(state, config, params)
+        losses.append(metrics["loss"])
+        cum_returns.append(metrics["cum_return"])
+    return state.q_net, losses, cum_returns
 
 
 def train_minibatched(
@@ -207,6 +294,7 @@ def train_minibatched(
         "rollout_ms": [],
         "q_lambda_return_ms": [],
         "reshape": [],
+        "train_step": [],
         "update": [],
     }
 
@@ -270,13 +358,15 @@ def train_minibatched(
                 minibatch_actions = flat_actions[minibatch_idx]
                 minibatch_returns = flat_returns[minibatch_idx]
 
-                loss = train_step(
+                train_step_pre = time.perf_counter()
+                _, _, loss = train_step(
                     q_net,
                     optimizer,
                     minibatch_obs,
                     minibatch_actions,
                     minibatch_returns,
                 )
+                times["train_step"].append(time.perf_counter() - train_step_pre)
                 losses.append(loss)
 
         times["update"].append(time.perf_counter() - update_pre)
