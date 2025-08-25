@@ -278,9 +278,4 @@ if __name__ == "__main__":
     )
     q_net = Model(width * height * 4, 256, width * height * 4, rngs=nnx.Rngs(0))
     optimizer = nnx.Optimizer(q_net, optax.adam(params.lr))
-    train_minibatched(
-        q_net,
-        optimizer,
-        config,
-        params,
-    )
+    train_minibatched(q_net, optimizer, config, params)

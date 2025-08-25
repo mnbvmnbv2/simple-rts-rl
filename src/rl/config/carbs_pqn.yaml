@@ -40,7 +40,7 @@ params:
   - name: lr
     space:
       _target_: carbs.LogSpace
-      scale: 0.5
+      scale: 0.8
     default: 4e-4
 
   - name: gamma

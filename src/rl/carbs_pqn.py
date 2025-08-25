@@ -1,5 +1,6 @@
 import glob
 import re
+import os
 import logging
 import jax
 import numpy as np
@@ -24,7 +25,10 @@ def main(cfg: DictConfig):
         params.append((p.name, space, p.default))
     param_spaces = [Param(name=p[0], space=p[1], search_center=p[2]) for p in params]
 
-    ckpts = glob.glob("./checkpoints/carbs_experiment/carbs_*.pt")
+    # This is used in CARBS
+    os.environ["EXPERIMENT_NAME"] = cfg.EXPERIMENT
+
+    ckpts = glob.glob(f"./checkpoints/{cfg.EXPERIMENT}/carbs_*.pt")
     if ckpts:
         # extract the trial number from filenames like "carbs_{N}obs.pt"
         def _num(f):
@@ -39,7 +43,6 @@ def main(cfg: DictConfig):
         carbs_params = CARBSParams(
             better_direction_sign=1,
             is_wandb_logging_enabled=False,
-            checkpoint_dir=cfg.checkpoints_dir,
             # resample_frequency=0,
         )
         carbs = CARBS(carbs_params, param_spaces)
