@@ -1,7 +1,5 @@
 import glob
 import re
-import time
-import signal
 import logging
 import jax
 import numpy as np
@@ -43,15 +41,6 @@ def main(cfg: DictConfig):
     ]
     param_spaces = [Param(name=p[0], space=p[1], search_center=p[2]) for p in params]
 
-    stop = False
-
-    def handler(sig, _):  # graceful Ctrl‑C / SIGTERM
-        global stop
-        stop = True
-
-    for s in (signal.SIGINT, signal.SIGTERM):
-        signal.signal(s, handler)
-
     ckpts = glob.glob("./checkpoints/carbs_experiment/carbs_*.pt")
     if ckpts:
         # extract the trial number from filenames like "carbs_{N}obs.pt"
@@ -67,6 +56,7 @@ def main(cfg: DictConfig):
         carbs_params = CARBSParams(
             better_direction_sign=1,
             is_wandb_logging_enabled=False,
+            checkpoint_dir=cfg.checkpoints_dir,
             # resample_frequency=0,
         )
         carbs = CARBS(carbs_params, param_spaces)
@@ -103,7 +93,7 @@ def main(cfg: DictConfig):
     )
 
     trial_id = carbs.observation_count
-    while not stop:
+    for _ in range(cfg.num_trials):
         trial_id += 1
         sug = carbs.suggest().suggestion
         params = Params(
@@ -118,7 +108,6 @@ def main(cfg: DictConfig):
             epsilon=sug["epsilon"],
         )
 
-        t0 = time.time()
         qnet = Model(
             cfg.env.width * cfg.env.height * 4,
             512,
@@ -126,8 +115,9 @@ def main(cfg: DictConfig):
             rngs=nnx.Rngs(0),
         )
         opt = nnx.Optimizer(qnet, optax.adam(params.lr))
-        qnet, *_ = train_minibatched(qnet, opt, config, params)
-        runtime = time.time() - t0
+        qnet, _, _, times = train_minibatched(qnet, opt, config, params)
+        # get time from after first iteration (JIT)
+        runtime = sum(sum(v[1:]) for _, v in times.items() if len(v) > 1)
         output = float(
             np.mean(
                 evaluate_batch(

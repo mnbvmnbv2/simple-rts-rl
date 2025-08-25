@@ -180,7 +180,7 @@ def train_minibatched(
     config: EnvConfig,
     params: Params,
     seed: int = 0,
-) -> tuple[Model, list, list]:
+):
     rng_key = jax.random.PRNGKey(seed)
     losses = []
     cum_returns = []

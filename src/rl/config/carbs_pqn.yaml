@@ -1,5 +1,7 @@
 MLFLOW_URI: "file:./mlruns"
 EXPERIMENT: "carbs_indefinite"
+checkpoints_dir: ${EXPERIMENT}
+num_trials: 1000
 num_steps: 300
 num_envs: 256
 env:
