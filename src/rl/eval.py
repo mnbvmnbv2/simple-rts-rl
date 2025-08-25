@@ -5,7 +5,7 @@ from jax import lax
 from src.rts.config import EnvConfig
 from src.rts.env import init_state
 from src.rts.utils import get_legal_moves, p1_step
-from src.rl.pqn import Model
+from src.rl.model import Model
 
 
 def evaluate_batch(

@@ -1,7 +1,15 @@
-import glob, re, time, signal, logging, jax, numpy as np, mlflow
+import glob
+import re
+import time
+import signal
+import logging
+import jax
+import numpy as np
+import mlflow
 from flax import nnx
 import optax
-from src.rl.pqn import Params, train_minibatched, Model
+from src.rl.model import Model
+from src.rl.pqn import Params, train_minibatched
 from src.rl.eval import evaluate_batch
 from src.rts.config import EnvConfig, RewardConfig
 from carbs import (
@@ -59,7 +67,7 @@ def main(cfg: DictConfig):
         carbs_params = CARBSParams(
             better_direction_sign=1,
             is_wandb_logging_enabled=False,
-            resample_frequency=0,
+            # resample_frequency=0,
         )
         carbs = CARBS(carbs_params, param_spaces)
         logging.info("Started new CARBS run")
@@ -103,8 +111,8 @@ def main(cfg: DictConfig):
             lr=sug["lr"],
             gamma=sug["gamma"],
             q_lambda=sug["q_lambda"],
-            num_envs=200,
-            num_steps=250,
+            num_envs=cfg.num_envs,
+            num_steps=cfg.num_steps,
             update_epochs=sug["update_epochs"],
             num_minibatches=sug["num_minibatches"],
             epsilon=sug["epsilon"],
@@ -123,7 +131,11 @@ def main(cfg: DictConfig):
         output = float(
             np.mean(
                 evaluate_batch(
-                    qnet, config, jax.random.PRNGKey(0), batch_size=100, num_steps=250
+                    qnet,
+                    config,
+                    jax.random.PRNGKey(0),
+                    batch_size=cfg.num_envs,
+                    num_steps=cfg.num_steps,
                 )
             )
         )

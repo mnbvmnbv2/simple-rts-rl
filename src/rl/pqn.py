@@ -1,7 +1,5 @@
 import functools
 from dataclasses import dataclass
-import time
-from typing import NamedTuple
 
 from flax import nnx
 import optax
@@ -13,6 +11,8 @@ from tqdm import tqdm
 from src.rts.config import EnvConfig
 from src.rts.env import init_state, is_done
 from src.rts.utils import get_legal_moves, p1_step, random_move
+from src.rl.utils import TimerLog
+from src.rl.model import Model
 
 
 @dataclass(frozen=True)
@@ -26,23 +26,6 @@ class Params:
     update_epochs: int
     num_minibatches: int
     epsilon: float
-
-
-class Model(nnx.Module):
-    def __init__(self, in_dim, mid_dim, out_dim, rngs: nnx.Rngs):
-        self.lin_in = nnx.Linear(in_dim, mid_dim, rngs=rngs)
-        self.layer_norm1 = nnx.LayerNorm(mid_dim, rngs=rngs)
-        self.lin_mid1 = nnx.Linear(mid_dim, mid_dim, rngs=rngs)
-        self.layer_norm2 = nnx.LayerNorm(mid_dim, rngs=rngs)
-        self.lin_mid2 = nnx.Linear(mid_dim, mid_dim, rngs=rngs)
-        self.layer_norm3 = nnx.LayerNorm(mid_dim, rngs=rngs)
-        self.lin_out = nnx.Linear(mid_dim, out_dim, rngs=rngs)
-
-    def __call__(self, x):
-        x = nnx.relu(self.layer_norm1(self.lin_in(x)))
-        x = nnx.relu(self.layer_norm2(self.lin_mid1(x)))
-        x = nnx.relu(self.layer_norm3(self.lin_mid2(x)))
-        return self.lin_out(x)
 
 
 @functools.partial(nnx.jit, static_argnames=("config", "num_steps"))
@@ -191,187 +174,81 @@ vmapped_rollout = jax.vmap(single_rollout, in_axes=(0, None, None, None, None))
 vmapped_q_lambda_return = jax.vmap(q_lambda_return, in_axes=(None, 0, 0, 0, None, None))
 
 
-class TrainState(NamedTuple):
-    q_net: Model
-    opt: nnx.Optimizer
-    rng: jax.Array
-
-
-@functools.partial(nnx.jit, static_argnums=(1, 2))
-def _iteration_step(state: TrainState, config: EnvConfig, params: Params):
-    q_net, opt, rng = state
-
-    # --- rollout ---
-    rng, k_split = jax.random.split(rng)
-    keys = jax.random.split(k_split, params.num_envs)
-    obs_buf, act_buf, rew_buf, done_buf, next_obs_buf, cum_ret = vmapped_rollout(
-        keys, config, q_net, params.num_steps, params.epsilon
-    )
-    returns = vmapped_q_lambda_return(
-        q_net, rew_buf, done_buf, next_obs_buf, params.gamma, params.q_lambda
-    )
-
-    # --- flatten (N = num_envs * num_steps) ---
-    flat_obs = obs_buf.reshape(-1, obs_buf.shape[-1])  # [N, D]
-    flat_act = act_buf.reshape(-1)  # [N]
-    flat_ret = returns.reshape(-1)  # [N]
-
-    # --- static minibatch partition ---
-    num_samples = flat_obs.shape[0]
-    B = num_samples // params.num_minibatches
-    M = params.num_minibatches
-    num_full = M * B  # truncate remainder to keep shapes static
-
-    flat_obs = flat_obs[:num_full]
-    flat_act = flat_act[:num_full]
-    flat_ret = flat_ret[:num_full]
-
-    # ----- inner scan over minibatches -----
-    @nnx.scan
-    def scan_minibatches(carry_mb, xs_mb):
-        q_net, opt = carry_mb
-        mb_obs, mb_act, mb_ret = xs_mb  # each has leading axis B
-        q_net, opt, loss = train_step(q_net, opt, mb_obs, mb_act, mb_ret)
-        return (q_net, opt), loss
-
-    # ----- outer scan over epochs -----
-    @nnx.scan
-    def scan_epochs(carry, _):
-        q_net, opt, rng = carry
-        rng, k_perm = jax.random.split(rng)
-
-        # permutation & pre-gather to [M, B, ...]  (no indexing inside scan body)
-        perm = jax.random.permutation(k_perm, num_full).reshape(M, B)  # [M, B]
-
-        obs_mb = flat_obs[perm]  # [M, B, D]
-        act_mb = flat_act[perm]  # [M, B]
-        ret_mb = flat_ret[perm]  # [M, B]
-
-        # scan over minibatches (leading axis M)
-        (q_net, opt), losses = scan_minibatches(
-            (q_net, opt),
-            (obs_mb, act_mb, ret_mb),
-        )
-        # mean loss this epoch
-        return (q_net, opt, rng), jnp.mean(losses)
-
-    (q_net, opt, rng), epoch_losses = scan_epochs(
-        (q_net, opt, rng), jnp.arange(params.update_epochs)
-    )
-
-    metrics = {"loss": jnp.mean(epoch_losses), "cum_return": jnp.mean(cum_ret)}
-    return TrainState(q_net, opt, rng), metrics
-
-
-def train_minibatched_jitted(
-    q_net: Model, optimizer: nnx.Optimizer, config: EnvConfig, params: Params
-):
-    state = TrainState(q_net=q_net, opt=optimizer, rng=jax.random.PRNGKey(0))
-    losses = []
-    cum_returns = []
-    for _ in range(params.num_iterations):
-        state, metrics = _iteration_step(state, config, params)
-        losses.append(metrics["loss"])
-        cum_returns.append(metrics["cum_return"])
-    return state.q_net, losses, cum_returns
-
-
 def train_minibatched(
     q_net: Model,
     optimizer: nnx.Optimizer,
     config: EnvConfig,
     params: Params,
+    seed: int = 0,
 ) -> tuple[Model, list, list]:
-    rng_key = jax.random.PRNGKey(0)
-    vmapped_rollout = jax.vmap(single_rollout, in_axes=(0, None, None, None, None))
-    vmapped_q_lambda_return = jax.vmap(
-        q_lambda_return, in_axes=(None, 0, 0, 0, None, None)
-    )
+    rng_key = jax.random.PRNGKey(seed)
     losses = []
     cum_returns = []
-    times = {
-        "rng_split": [],
-        "rollout_ms": [],
-        "q_lambda_return_ms": [],
-        "reshape": [],
-        "train_step": [],
-        "update": [],
-    }
+    timer = TimerLog()
 
     for iteration in tqdm(range(params.num_iterations)):
-        split_pre = time.perf_counter()
-        rng_keys = jax.random.split(rng_key, params.num_envs + 1)
-        rng_key, rollout_keys = rng_keys[0], rng_keys[1:]
-        times["rng_split"].append(time.perf_counter() - split_pre)
+        with timer.record("rng_split"):
+            rng_keys = jax.random.split(rng_key, params.num_envs + 1)
+            rng_key, rollout_keys = rng_keys[0], rng_keys[1:]
 
-        rollout_pre = time.perf_counter()
-        rollout = vmapped_rollout(
-            rollout_keys, config, q_net, params.num_steps, params.epsilon
-        )
-        (
-            obs_buffer,
-            actions_buffer,
-            rewards_buffer,
-            done_buffer,
-            next_obs_buffer,
-            cum_return,
-        ) = rollout
-        times["rollout_ms"].append(time.perf_counter() - rollout_pre)
+        with timer.record("rollout"):
+            rollout = vmapped_rollout(
+                rollout_keys, config, q_net, params.num_steps, params.epsilon
+            )
+            (
+                obs_buffer,
+                actions_buffer,
+                rewards_buffer,
+                done_buffer,
+                next_obs_buffer,
+                cum_return,
+            ) = rollout
 
         cum_returns.append(cum_return)
 
-        q_lambda_return_pre = time.perf_counter()
-        returns = vmapped_q_lambda_return(
-            q_net,
-            rewards_buffer,
-            done_buffer,
-            next_obs_buffer,
-            params.gamma,
-            params.q_lambda,
-        )
-        times["q_lambda_return_ms"].append(time.perf_counter() - q_lambda_return_pre)
+        with timer.record("q_lambda_return"):
+            returns = vmapped_q_lambda_return(
+                q_net,
+                rewards_buffer,
+                done_buffer,
+                next_obs_buffer,
+                params.gamma,
+                params.q_lambda,
+            )
 
-        reshape_pre = time.perf_counter()
-        flat_observations = obs_buffer.reshape(-1, obs_buffer.shape[-1])
-        flat_actions = actions_buffer.reshape(-1)
-        flat_returns = returns.reshape(-1)
-        num_samples = flat_observations.shape[0]
-        minibatch_size = num_samples // params.num_minibatches
-        times["reshape"].append(time.perf_counter() - reshape_pre)
+        with timer.record("reshape"):
+            flat_observations = obs_buffer.reshape(-1, obs_buffer.shape[-1])
+            flat_actions = actions_buffer.reshape(-1)
+            flat_returns = returns.reshape(-1)
+            num_samples = flat_observations.shape[0]
+            minibatch_size = num_samples // params.num_minibatches
 
-        update_pre = time.perf_counter()
-        for epoch in range(params.update_epochs):
-            rng_key, perm_key = jax.random.split(rng_key)
-            permuted_indices = jax.random.permutation(perm_key, num_samples)
+        with timer.record("update"):
+            for epoch in range(params.update_epochs):
+                rng_key, perm_key = jax.random.split(rng_key)
+                permuted_indices = jax.random.permutation(perm_key, num_samples)
 
-            for i in range(params.num_minibatches):
-                start_idx = i * minibatch_size
-                # Ensure that the last minibatch gets any remaining samples.
-                end_idx = (
-                    (i + 1) * minibatch_size
-                    if i < params.num_minibatches - 1
-                    else num_samples
-                )
-                minibatch_idx = permuted_indices[start_idx:end_idx]
+                for i in range(params.num_minibatches):
+                    start_idx = i * minibatch_size
+                    # We might lose out on some final samples, but we do so to avoid recompile of train with new
+                    # shape
+                    end_idx = (i + 1) * minibatch_size
+                    minibatch_idx = permuted_indices[start_idx:end_idx]
 
-                minibatch_obs = flat_observations[minibatch_idx]
-                minibatch_actions = flat_actions[minibatch_idx]
-                minibatch_returns = flat_returns[minibatch_idx]
+                    minibatch_obs = flat_observations[minibatch_idx]
+                    minibatch_actions = flat_actions[minibatch_idx]
+                    minibatch_returns = flat_returns[minibatch_idx]
 
-                train_step_pre = time.perf_counter()
-                _, _, loss = train_step(
-                    q_net,
-                    optimizer,
-                    minibatch_obs,
-                    minibatch_actions,
-                    minibatch_returns,
-                )
-                times["train_step"].append(time.perf_counter() - train_step_pre)
-                losses.append(loss)
+                    _, _, loss = train_step(
+                        q_net,
+                        optimizer,
+                        minibatch_obs,
+                        minibatch_actions,
+                        minibatch_returns,
+                    )
+                    losses.append(loss)
 
-        times["update"].append(time.perf_counter() - update_pre)
-
-    return q_net, losses, cum_returns, times
+    return q_net, losses, cum_returns, dict(timer.store)
 
 
 if __name__ == "__main__":

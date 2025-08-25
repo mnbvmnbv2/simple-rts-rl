@@ -1,6 +1,7 @@
-a: 4
 MLFLOW_URI: "file:./mlruns"
 EXPERIMENT: "carbs_indefinite"
+num_steps: 300
+num_envs: 256
 env:
   width: 10
   height: 10
