@@ -26,3 +26,61 @@ reward:
   opponent_tile_loss: 0
   opponent_base_gain: 0
   opponent_base_loss: 0
+
+params:
+  - name: num_iterations
+    space:
+      _target_: carbs.LinearSpace
+      is_integer: true
+      min: 1
+      max: 5000
+      scale: 100
+    default: 40
+
+  - name: lr
+    space:
+      _target_: carbs.LogSpace
+      scale: 0.5
+    default: 4e-4
+
+  - name: gamma
+    space:
+      _target_: carbs.LogitSpace
+    default: 0.99
+
+  - name: q_lambda
+    space:
+      _target_: carbs.LogitSpace
+    default: 0.92
+
+  # - name: num_envs
+  #   space:
+  #     _target_: carbs.LinearSpace
+  #     is_integer: true
+  #     min: 1
+  #     max: 5000
+  #     scale: 100
+  #   default: 200
+
+  - name: update_epochs
+    space:
+      _target_: carbs.LinearSpace
+      is_integer: true
+      min: 1
+      max: 8
+      scale: 4
+    default: 1
+
+  - name: num_minibatches
+    space:
+      _target_: carbs.LinearSpace
+      is_integer: true
+      min: 1
+      max: 16
+      scale: 8
+    default: 4
+
+  - name: epsilon
+    space:
+      _target_: carbs.LogitSpace
+    default: 0.3

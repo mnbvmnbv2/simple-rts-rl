@@ -10,35 +10,18 @@ from src.rl.model import Model
 from src.rl.pqn import Params, train_minibatched
 from src.rl.eval import evaluate_batch
 from src.rts.config import EnvConfig, RewardConfig
-from carbs import (
-    CARBS,
-    CARBSParams,
-    ObservationInParam,
-    Param,
-    LogSpace,
-    LogitSpace,
-    LinearSpace,
-)
+from carbs import CARBS, CARBSParams, ObservationInParam, Param
 import hydra
+from hydra.utils import instantiate
 from omegaconf import DictConfig
 
 
 @hydra.main(version_base=None, config_path="config", config_name="carbs_pqn")
 def main(cfg: DictConfig):
-    params = [
-        (
-            "num_iterations",
-            LinearSpace(is_integer=True, min=1, max=5000, scale=100),
-            40,
-        ),
-        ("lr", LogSpace(scale=0.5), 4e-4),
-        ("gamma", LogitSpace(), 0.99),
-        ("q_lambda", LogitSpace(), 0.92),
-        # ("num_envs", LinearSpace(is_integer=True, min=1, max=5000, scale=100), 200),
-        ("update_epochs", LinearSpace(is_integer=True, min=1, max=8, scale=4), 1),
-        ("num_minibatches", LinearSpace(is_integer=True, min=1, max=16, scale=8), 4),
-        ("epsilon", LogitSpace(), 0.3),
-    ]
+    params = []
+    for p in cfg.params:
+        space = instantiate(p.space)
+        params.append((p.name, space, p.default))
     param_spaces = [Param(name=p[0], space=p[1], search_center=p[2]) for p in params]
 
     ckpts = glob.glob("./checkpoints/carbs_experiment/carbs_*.pt")
