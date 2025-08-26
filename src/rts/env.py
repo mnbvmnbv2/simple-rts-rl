@@ -124,19 +124,14 @@ def move(
     surviving_attackers = num_attacking_troops - damage
 
     # Reduce enemy troops proportionally.
-    new_enemy_counts = jnp.where(
-        total_enemy > 0,
-        enemy_counts - (enemy_counts / total_enemy) * damage,
-        enemy_counts,
+    enemy_loss = jnp.where(
+        total_enemy > 0, jnp.floor_divide(enemy_counts * damage, total_enemy), 0
     )
-    new_enemy_counts = jnp.floor(new_enemy_counts)  # convert to integer counts
-
-    new_neutral = jnp.where(
-        total_enemy > 0,
-        neutral_count - (neutral_count / total_enemy) * damage,
-        neutral_count,
+    neutral_loss = jnp.where(
+        total_enemy > 0, jnp.floor_divide(neutral_count * damage, total_enemy), 0
     )
-    new_neutral = jnp.floor(new_neutral)
+    new_enemy_counts = enemy_counts - enemy_loss
+    new_neutral = neutral_count - neutral_loss
 
     # Update the moving player's count at the target cell.
     new_moving_player_count = (
@@ -184,7 +179,7 @@ def reinforce_troops(
     Regardless of time, all tiles with player troops on a base get a troop.
     """
     board = state.board
-    bonus_troops = (state.time == 0).astype(int)
+    bonus_troops = (state.time == 0).astype(jnp.int32)
 
     troop_locations = board.player_troops > 0
     base_bonus = board.bases.astype(jnp.int32)
