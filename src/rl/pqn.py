@@ -1,4 +1,5 @@
 import functools
+import gc
 from dataclasses import dataclass
 
 from flax import nnx
@@ -6,6 +7,7 @@ import optax
 import jax
 import jax.lax
 import jax.numpy as jnp
+import numpy as np
 from tqdm import tqdm
 
 from src.rts.config import EnvConfig
@@ -65,6 +67,7 @@ def single_rollout(
             lambda _: q_net_action,
             operand=None,
         )
+        action = jnp.asarray(action, dtype=jnp.int32)
 
         # Split the scalar action into (row, col, direction) components.
         action_split = jnp.array(
@@ -204,7 +207,8 @@ def train_minibatched(
                 cum_return,
             ) = rollout
 
-        cum_returns.append(cum_return)
+        cum_return = jax.device_get(cum_return)
+        cum_returns.append(np.asarray(cum_return))
 
         with timer.record("q_lambda_return"):
             returns = vmapped_q_lambda_return(
@@ -246,7 +250,20 @@ def train_minibatched(
                         minibatch_actions,
                         minibatch_returns,
                     )
-                    losses.append(loss)
+                    loss = loss.block_until_ready()
+                    losses.append(float(loss))
+
+    del (
+        obs_buffer,
+        actions_buffer,
+        rewards_buffer,
+        done_buffer,
+        next_obs_buffer,
+        returns,
+    )
+    del flat_observations, flat_actions, flat_returns
+    gc.collect()
+    jax.clear_caches()
 
     return q_net, losses, cum_returns, dict(timer.store)
 
