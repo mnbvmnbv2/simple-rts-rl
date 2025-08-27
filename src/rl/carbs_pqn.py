@@ -36,7 +36,7 @@ def main(cfg: DictConfig):
             return int(m.group(1)) if m else -1
 
         latest = max(ckpts, key=_num)
-        print(f"Loading CARBS state from {latest!r}")
+        logging.info(f"Loading CARBS state from {latest!r}")
         carbs = CARBS.load_from_file(latest)
         logging.info("Resumed CARBS with %d past observations", carbs.observation_count)
     else:
