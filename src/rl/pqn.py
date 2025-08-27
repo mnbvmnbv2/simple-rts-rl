@@ -14,7 +14,7 @@ from src.rts.config import EnvConfig
 from src.rts.env import init_state, is_done
 from src.rts.utils import get_legal_moves, p1_step, random_move
 from src.rl.utils import TimerLog
-from src.rl.model import Model
+from src.rl.model import MLP
 
 
 @dataclass(frozen=True)
@@ -34,7 +34,7 @@ class Params:
 def single_rollout(
     rng_key,
     config: EnvConfig,
-    model: Model,
+    model: nnx.Module,
     num_steps: int,
     epsilon: float,
 ):
@@ -108,7 +108,7 @@ def single_rollout(
 
 @nnx.jit
 def q_lambda_return(
-    q_net: Model,
+    q_net: nnx.Module,
     rewards_buffer: jnp.ndarray,
     done_buffer: jnp.ndarray,
     next_obs_buffer: jnp.ndarray,
@@ -157,12 +157,12 @@ def q_lambda_return(
 
 @nnx.jit
 def train_step(
-    q_net: Model,
+    q_net: nnx.Module,
     optimizer: nnx.Optimizer,
     observations: jnp.ndarray,
     actions: jnp.ndarray,
     returns: jnp.ndarray,
-) -> tuple[Model, nnx.Optimizer, jnp.ndarray]:
+) -> tuple[nnx.Module, nnx.Optimizer, jnp.ndarray]:
     def loss_fn(m) -> jnp.ndarray:
         q_values = m(observations)
         acted_q = jnp.take_along_axis(q_values, actions[:, None], axis=1).squeeze(-1)
@@ -178,7 +178,7 @@ vmapped_q_lambda_return = jax.vmap(q_lambda_return, in_axes=(None, 0, 0, 0, None
 
 
 def train_minibatched(
-    q_net: Model,
+    q_net: nnx.Module,
     optimizer: nnx.Optimizer,
     config: EnvConfig,
     params: Params,
@@ -293,6 +293,6 @@ if __name__ == "__main__":
         num_minibatches=4,
         epsilon=0.3,
     )
-    q_net = Model(width * height * 4, 256, width * height * 4, rngs=nnx.Rngs(0))
+    q_net = MLP(width * height * 4, [256, 256], width * height * 4, rngs=nnx.Rngs(0))
     optimizer = nnx.Optimizer(q_net, optax.adam(params.lr))
     train_minibatched(q_net, optimizer, config, params)

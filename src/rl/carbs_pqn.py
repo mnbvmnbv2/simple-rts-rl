@@ -7,7 +7,7 @@ import numpy as np
 import mlflow
 from flax import nnx
 import optax
-from src.rl.model import Model
+from src.rl.model import MLP
 from src.rl.pqn import Params, train_minibatched
 from src.rl.eval import evaluate_batch
 from src.rts.config import EnvConfig, RewardConfig
@@ -94,9 +94,9 @@ def main(cfg: DictConfig):
             epsilon=sug["epsilon"],
         )
 
-        qnet = Model(
+        qnet = MLP(
             cfg.env.width * cfg.env.height * 4,
-            512,
+            [512, 512],
             cfg.env.width * cfg.env.height * 4,
             rngs=nnx.Rngs(0),
         )

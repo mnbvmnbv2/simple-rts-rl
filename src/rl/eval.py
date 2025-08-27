@@ -1,15 +1,15 @@
 import jax
 import jax.numpy as jnp
 from jax import lax
+from flax import nnx
 
 from src.rts.config import EnvConfig
 from src.rts.env import init_state
 from src.rts.utils import get_legal_moves, p1_step
-from src.rl.model import Model
 
 
 def evaluate_batch(
-    q_net: Model,
+    q_net: nnx.Module,
     config: EnvConfig,
     rng_key: jax.random.PRNGKey,
     batch_size: int = 32,
