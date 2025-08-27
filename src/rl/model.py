@@ -151,3 +151,65 @@ if __name__ == "__main__":
     print(
         f"Backward batched (vmap): {bps_b:.2f} steps/s | {bps_b * batch:.0f} examples/s"
     )
+
+    def sweep_batches(
+        model, in_dim, out_dim, batch_candidates, iters=30, key=jax.random.PRNGKey(0)
+    ):
+        # jitted once; retraces when batch shape changes (fine for a quick sweep)
+        fwd_batched = nnx.jit(lambda m, X: jax.vmap(lambda x: m(x))(X))
+
+        def loss_batched(m, X, Y):
+            P = jax.vmap(lambda x: m(x))(X)
+            return jnp.mean((P - Y) ** 2)
+
+        bwd_batched = nnx.jit(nnx.grad(loss_batched))
+
+        print("Batch sweep (forward/backward):")
+        best = {"batch": None, "ex_s": -1, "f_sps": 0, "b_sps": 0}
+
+        for b in batch_candidates:
+            try:
+                kx, ky = jax.random.split(key)
+                X = jax.random.normal(kx, (b, in_dim))
+                Y = jax.random.normal(ky, (b, out_dim))
+
+                # compile + warmup
+                _sync(fwd_batched(model, X))
+                _sync(bwd_batched(model, X, Y))
+
+                f_sps = bench(fwd_batched, model, X, iters=iters)
+                b_sps = bench(bwd_batched, model, X, Y, iters=max(10, iters // 2))
+                ex_s = (
+                    b * f_sps
+                )  # forward ex/s; you can also report backward ex/s as b*b_sps
+
+                print(
+                    f"  b={b:6d} | fwd {f_sps:8.0f} steps/s ({ex_s:10.0f} ex/s) | "
+                    f"bwd {b_sps:8.0f} steps/s ({b * b_sps:10.0f} ex/s)"
+                )
+
+                if ex_s > best["ex_s"]:
+                    best = {"batch": b, "ex_s": ex_s, "f_sps": f_sps, "b_sps": b_sps}
+
+            except Exception as e:
+                msg = str(e)
+                if (
+                    "RESOURCE_EXHAUSTED" in msg
+                    or "OutOfMemory" in msg
+                    or "out of memory" in msg.lower()
+                ):
+                    print(f"  b={b:6d} | OOM")
+                    continue
+                else:
+                    print(f"  b={b:6d} | error: {e}")
+                    continue
+
+        print(
+            f"\nBest by forward ex/s: batch={best['batch']} "
+            f"→ {best['ex_s']:,.0f} ex/s (fwd {best['f_sps']:,.0f} steps/s, "
+            f"bwd {best['b_sps']:,.0f} steps/s)"
+        )
+        return best
+
+    batches = [2**k for k in range(6, 16)]  # 64..32768
+    _ = sweep_batches(model, in_dim, out_dim, batches, iters=30)
