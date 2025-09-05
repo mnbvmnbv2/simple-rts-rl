@@ -265,7 +265,11 @@ def train_minibatched(
     gc.collect()
     jax.clear_caches()
 
-    return q_net, losses, cum_returns, dict(timer.store)
+    times_dict = dict(timer.store)
+    compile_time = sum(v[0] for k, v in times_dict.items())
+    print(f"{compile_time=}")
+
+    return q_net, losses, cum_returns, times_dict
 
 
 if __name__ == "__main__":
