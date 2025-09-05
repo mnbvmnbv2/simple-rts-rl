@@ -23,11 +23,21 @@ class Board:
 
     @jax.jit
     def flatten(self):
+        # reductions to scalars
+        max_player = jnp.max(self.player_troops)
+        max_neutral = jnp.max(self.neutral_troops)
+
+        # elementwise max of the two scalars
+        max_troops = jnp.maximum(max_player, max_neutral)
+
+        # avoid divide-by-zero if the board is empty
+        denom = jnp.where(max_troops > 0, max_troops, 1)
+
         return jnp.concatenate(
             [
-                self.player_troops.flatten(),
-                self.neutral_troops.flatten(),
-                self.bases.flatten(),
+                (self.player_troops / denom).ravel(),
+                (self.neutral_troops / denom).ravel(),
+                self.bases.astype(jnp.float32).ravel(),  # ensure same dtype
             ]
         )
 
