@@ -35,9 +35,9 @@ class Board:
 
         return jnp.concatenate(
             [
-                (self.player_troops / denom).ravel(),
-                (self.neutral_troops / denom).ravel(),
-                self.bases.astype(jnp.float32).ravel(),  # ensure same dtype
+                (self.player_troops / denom).ravel().astype(jnp.float32),
+                (self.neutral_troops / denom).ravel().astype(jnp.float32),
+                self.bases.astype(jnp.float32).ravel(),
             ]
         )
 
