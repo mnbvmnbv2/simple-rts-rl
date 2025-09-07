@@ -102,12 +102,13 @@ def move(
     target_y = jnp.where(action == 0, y - 1, jnp.where(action == 2, y + 1, y))
 
     # Check move validity.
-    source_in_bounds = jnp.logical_and(x >= 0, x < board.width) & jnp.logical_and(
-        y >= 0, y < board.height
+    source_in_bounds = (x >= 0) & (x < board.width) & (y >= 0) & (y < board.height)
+    target_in_bounds = (
+        (target_y >= 0)
+        & (target_y < board.height)
+        & (target_x >= 0)
+        & (target_x < board.width)
     )
-    target_in_bounds = jnp.logical_and(
-        target_y >= 0, target_y < board.height
-    ) & jnp.logical_and(target_x >= 0, target_x < board.width)
     has_enough_troops = player_troops[y, x] > 1
     valid_move = source_in_bounds & target_in_bounds & has_enough_troops
 
@@ -116,7 +117,7 @@ def move(
 
     enemy_counts = board.player_troops[:, target_y, target_x]
     mask = jnp.not_equal(jnp.arange(num_players), player)
-    sum_enemy = jnp.sum(enemy_counts * mask.astype(jnp.int32))
+    sum_enemy = jnp.sum(jnp.where(mask, enemy_counts, 0))
     neutral_count = board.neutral_troops[target_y, target_x]
     total_enemy = sum_enemy + neutral_count
 
