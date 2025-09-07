@@ -4,6 +4,9 @@ import jax.numpy as jnp
 from typing import Callable, Iterable
 
 
+DType = jnp.dtype
+
+
 class MLP(nnx.Module):
     def __init__(
         self,
@@ -13,9 +16,12 @@ class MLP(nnx.Module):
         *,
         activation: Callable[[jnp.ndarray], jnp.ndarray] = nnx.relu,
         use_layernorm: bool = True,
-        pre_norm: bool = False,  # True: LN → Act; False: Act → LN
-        dropout_rate: float = 0.0,  # 0 disables dropout
-        residual: bool = False,  # add residuals when dims match
+        pre_norm: bool = False,
+        dropout_rate: float = 0.0,
+        residual: bool = False,
+        param_dtype: DType = jnp.float16,
+        compute_dtype: DType = jnp.float16,
+        ln_compute_dtype: DType = jnp.float32,
         rngs: nnx.Rngs,
     ):
         self.activation = activation
@@ -23,6 +29,9 @@ class MLP(nnx.Module):
         self.pre_norm = pre_norm
         self.residual = residual
         self.dropout_rate = dropout_rate
+        self.param_dtype = param_dtype
+        self.compute_dtype = compute_dtype
+        self.ln_compute_dtype = ln_compute_dtype
 
         dims = [in_dim, *list(hidden_dims)]
         self.linears: list[nnx.Linear] = []
@@ -31,41 +40,46 @@ class MLP(nnx.Module):
 
         for i in range(len(dims) - 1):
             d_in, d_out = dims[i], dims[i + 1]
-            self.linears.append(nnx.Linear(d_in, d_out, rngs=rngs))
+            self.linears.append(nnx.Linear(d_in, d_out, rngs=rngs, dtype=param_dtype))
             if use_layernorm:
-                self.norms.append(nnx.LayerNorm(d_out, rngs=rngs))
+                self.norms.append(nnx.LayerNorm(d_out, rngs=rngs, dtype=jnp.float32))
             else:
                 self.norms.append(None)  # type: ignore
-            if dropout_rate > 0.0:
-                self.drops.append(nnx.Dropout(dropout_rate, rngs=rngs))
-            else:
-                self.drops.append(None)
 
-        self.lin_out = nnx.Linear(dims[-1], out_dim, rngs=rngs)
+            self.drops.append(
+                nnx.Dropout(dropout_rate, rngs=rngs) if dropout_rate > 0 else None
+            )
+
+        self.lin_out = nnx.Linear(dims[-1], out_dim, rngs=rngs, dtype=param_dtype)
 
     def __call__(self, x, *, training: bool = False):
-        h = x
+        h = x.astype(self.compute_dtype)
+
         for i, lin in enumerate(self.linears):
-            y = lin(h)
+            y = lin(h).astype(self.compute_dtype)
 
             if self.use_layernorm and self.pre_norm:
-                y = self.norms[i](y)  # type: ignore
+                y = self.norms[i](y.astype(self.ln_compute_dtype)).astype(
+                    self.compute_dtype
+                )
 
             y = self.activation(y)
 
             if self.use_layernorm and not self.pre_norm:
-                y = self.norms[i](y)  # type: ignore
+                y = self.norms[i](y.astype(self.ln_compute_dtype)).astype(
+                    self.compute_dtype
+                )  # type: ignore
 
             if self.drops[i] is not None:
-                # deterministic=True disables dropout (i.e., eval mode)
                 y = self.drops[i](y, deterministic=not training)  # type: ignore
 
             if self.residual and h.shape[-1] == y.shape[-1]:
-                h = h + y
+                h = (h + y).astype(self.compute_dtype)
             else:
                 h = y
 
-        return self.lin_out(h)
+        out = self.lin_out(h).astype(self.compute_dtype)
+        return out
 
 
 if __name__ == "__main__":
