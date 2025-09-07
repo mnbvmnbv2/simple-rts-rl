@@ -82,7 +82,7 @@ def init_state(
         bases=bases,
     )
 
-    return EnvState(board=board)
+    return EnvState(board=board, time=jnp.array(5, dtype=jnp.int32))
 
 
 @jax.jit
@@ -193,7 +193,7 @@ def reinforce_troops(
     new_board = board.replace(player_troops=player_troops)
 
     # Decrese time and increase to 10 if bonus troops
-    time = state.time - 1 + bonus_troops * config.bonus_time
+    time = state.time - jnp.array(1, dtype=jnp.int32) + bonus_troops * config.bonus_time
     return EnvState(board=new_board, time=time)
 
 

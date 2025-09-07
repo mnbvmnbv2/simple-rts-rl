@@ -64,11 +64,11 @@ def create_test_state(p1, p2, neutral, bases, time=5):
         neutral_troops=jnp.array(neutral, dtype=jnp.int32),
         bases=jnp.array(bases, dtype=bool),
     )
-    return EnvState(board=board, time=time)
+    return EnvState(board=board, time=jnp.array(time, dtype=jnp.int32))
 
 
 def test_increase_troops(board: jnp.array, config: EnvConfig):
-    state = EnvState(board=board, time=4)
+    state = EnvState(board=board, time=jnp.array(4, dtype=jnp.int32))
     state = reinforce_troops(state, config)
     assert_valid_state(state)
 
@@ -96,7 +96,7 @@ def test_increase_troops(board: jnp.array, config: EnvConfig):
 
 
 def test_increase_troops_bonus(board: jnp.array, config: EnvConfig):
-    state = EnvState(board=board, time=0)
+    state = EnvState(board=board, time=jnp.array(0, dtype=jnp.int32))
     state = reinforce_troops(state, config)
     assert_valid_state(state)
 
@@ -175,9 +175,9 @@ def test_move_p1_vs_p2():
     # In this combat, player 1's source becomes 1; player 2 should have 0 at (1,2)
     # and player 1 gets remaining survivors.
     assert new_p1[1, 1] == 1, "Source should be reduced to 1 after combat."
-    assert (
-        new_p1[1, 2] == 1
-    ), "Player 1 should place surviving troops (if any) at target."
+    assert new_p1[1, 2] == 1, (
+        "Player 1 should place surviving troops (if any) at target."
+    )
     assert new_p2[1, 2] == 0, "Player 2's troops should be reduced to 0."
 
 

@@ -22,7 +22,7 @@ def _create_test_state(p1, p2, neutral, bases, time=5):
         neutral_troops=jnp.array(neutral, dtype=jnp.int32),
         bases=jnp.array(bases, dtype=bool),
     )
-    return EnvState(board=board, time=time)
+    return EnvState(board=board, time=jnp.array(time, dtype=jnp.int32))
 
 
 def test_get_legal_moves_no_moves():

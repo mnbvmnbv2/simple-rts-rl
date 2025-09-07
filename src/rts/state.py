@@ -45,4 +45,4 @@ class Board:
 @struct.dataclass
 class EnvState:
     board: Board
-    time: int = 5
+    time: jnp.ndarray

@@ -15,7 +15,7 @@ def board():
 
 
 def test_blank_state(board: Board):
-    state = EnvState(board=board, time=0)
+    state = EnvState(board=board, time=jnp.array(0, dtype=jnp.int32))
     assert_valid_state(state)
 
 
@@ -23,12 +23,12 @@ def test_basic_board(board: Board):
     # because frozen
     new_player_troops = board.player_troops.at[0, 0, 0].set(1)
     board = board.replace(player_troops=new_player_troops)
-    state = EnvState(board=board, time=0)
+    state = EnvState(board=board, time=jnp.array(0, dtype=jnp.int32))
     assert_valid_state(state)
 
 
 def test_negative_time(board: Board):
-    state = EnvState(board=board, time=-1)
+    state = EnvState(board=board, time=jnp.array(-1, dtype=jnp.int32))
     with pytest.raises(AssertionError):
         assert_valid_state(state)
 
@@ -37,6 +37,6 @@ def test_negative_troops(board: Board):
     # because frozen
     new_player_troops = board.player_troops.at[0, 0, 0].set(-1)
     board = board.replace(player_troops=new_player_troops)
-    state = EnvState(board=board, time=0)
+    state = EnvState(board=board, time=jnp.array(0, dtype=jnp.int32))
     with pytest.raises(AssertionError):
         assert_valid_state(state)

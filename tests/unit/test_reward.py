@@ -26,7 +26,7 @@ def create_test_state(p1, p2, neutral, bases, time=5):
         neutral_troops=jnp.array(neutral, dtype=jnp.int32),
         bases=jnp.array(bases, dtype=bool),
     )
-    return EnvState(board=board, time=time)
+    return EnvState(board=board, time=jnp.array(time, dtype=jnp.int32))
 
 
 def test_reward_capture_tile(reward_config: RewardConfig):
@@ -192,9 +192,9 @@ def test_reward_defeat_opponent(reward_config: RewardConfig):
     next_state = create_test_state(p1_final, p2_final, neutral, bases)
     reward = reward_function(state, next_state, player=0, config=reward_config)
     # +1 for the new tile and +100 for defeating the opponent
-    assert (
-        reward == 101
-    ), "Expected +101 reward for defeating opponent and capturing new tile"
+    assert reward == 101, (
+        "Expected +101 reward for defeating opponent and capturing new tile"
+    )
 
 
 def test_reward_player_defeated(reward_config: RewardConfig):
