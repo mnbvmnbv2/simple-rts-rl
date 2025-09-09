@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 from src.rl.model import MLP
 from src.rts.config import EnvConfig
-from src.rts.env import init_state, is_done
+from src.rts.env import EnvState, init_state, is_done
 from src.rts.utils import get_legal_moves, p1_step, sample_legal_action_flat
 
 
@@ -60,11 +60,8 @@ def single_rollout(
 
         # if done we init new state
         rng_key, subkey = jax.random.split(rng_key)
-        state = jax.lax.cond(
-            done,
-            lambda _: init_state(subkey, config),
-            lambda _: state,
-            operand=None,
+        state: EnvState = jax.lax.cond(
+            done, lambda _: init_state(subkey, config), lambda _: state, operand=None
         )
 
         flat_state = state.board.flatten()
