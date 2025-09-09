@@ -5,7 +5,7 @@ import distinctipy  # make sure to install via: pip install distinctipy
 
 from src.rts.config import EnvConfig
 from src.rts.env import init_state, move, reinforce_troops, EnvState, Board
-from src.rts.utils import get_legal_moves, fixed_argwhere
+from src.rts.utils import player_move
 from tests.helpers import assert_valid_state
 
 # -------------------------------
@@ -162,22 +162,9 @@ def main():
                         )
 
                     # For every opponent (players 1 to n-1), perform a random move.
-                    for agent in range(1, config.num_players):
-                        legal_actions_mask = get_legal_moves(state, agent)
-                        legal_actions, num_actions = fixed_argwhere(
-                            legal_actions_mask,
-                            max_actions=state.board.width * state.board.height * 4,
-                        )
-                        rng_key, subkey = jax.random.split(rng_key)
-                        action_idx = jax.random.randint(subkey, (), 0, num_actions)
-                        action_random = jnp.take(legal_actions, action_idx, axis=0)
-                        state = move(
-                            state,
-                            agent,
-                            action_random[1],
-                            action_random[0],
-                            action_random[2],
-                        )
+                    (state, rng_key), _ = jax.lax.scan(
+                        player_move, (state, rng_key), jnp.arange(1, config.num_players)
+                    )
 
                     # Reinforce troops for all players.
                     state = reinforce_troops(state, config)
