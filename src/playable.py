@@ -5,7 +5,7 @@ import pygame
 
 from src.rts.config import EnvConfig
 from src.rts.env import Board, EnvState, init_state, move, reinforce_troops
-from src.rts.utils import player_move
+from src.rts.utils import do_random_move_for_player
 from tests.helpers import assert_valid_state
 
 # -------------------------------
@@ -163,7 +163,9 @@ def main():
 
                     # For every opponent (players 1 to n-1), perform a random move.
                     (state, rng_key), _ = jax.lax.scan(
-                        player_move, (state, rng_key), jnp.arange(1, config.num_players)
+                        do_random_move_for_player,
+                        (state, rng_key),
+                        jnp.arange(1, config.num_players),
                     )
 
                     # Reinforce troops for all players.

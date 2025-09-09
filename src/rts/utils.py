@@ -60,7 +60,7 @@ def random_move(
     return action
 
 
-def player_move(carry, player):
+def do_random_move_for_player(carry, player: int):
     state, rng_key = carry
     rng_key, subkey = jax.random.split(rng_key)
     action = random_move(state, player, subkey)
@@ -77,7 +77,9 @@ def p1_step(
 ) -> tuple[EnvState, jnp.ndarray]:
     new_state: EnvState = move(state, 0, action[1], action[0], action[2])
     (new_state, rng_key), _ = jax.lax.scan(
-        player_move, (new_state, rng_key), jnp.arange(1, config.num_players)
+        do_random_move_for_player,
+        (new_state, rng_key),
+        jnp.arange(1, config.num_players),
     )
 
     next_state = reinforce_troops(new_state, config)
