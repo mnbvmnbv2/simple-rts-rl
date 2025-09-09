@@ -19,17 +19,11 @@ def evaluate_batch(
     states = jax.vmap(lambda key: init_state(key, config))(init_keys)
 
     def step_fn(states, step_key):
-        legal_mask = jax.vmap(lambda s: get_legal_moves(s, 0).flatten())(states)
+        legal_mask = jax.vmap(lambda s: get_legal_moves(s, 0))(states)
         boards_flat = jax.vmap(lambda s: s.board.flatten())(states)
         q_vals = jax.vmap(q_net)(boards_flat)
         masked_q = (q_vals + 1000) * legal_mask
-        act_int = jnp.argmax(masked_q, axis=1)
-
-        W = config.board_width
-        y = act_int // (W * 4)
-        x = (act_int % (W * 4)) // 4
-        d = act_int % 4
-        actions = jnp.stack([y, x, d], axis=1)
+        actions = jnp.argmax(masked_q, axis=1)
 
         subkeys = jax.random.split(step_key, batch_size)
         new_states, rewards = jax.vmap(lambda s, k, a: p1_step(s, k, config, a))(

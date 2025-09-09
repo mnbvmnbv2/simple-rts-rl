@@ -16,7 +16,7 @@ from tqdm import tqdm
 from src.rl.model import MLP
 from src.rts.config import EnvConfig
 from src.rts.env import init_state, is_done
-from src.rts.utils import get_legal_moves, p1_step, random_move
+from src.rts.utils import get_legal_moves, p1_step, get_random_move_for_player
 
 
 class TimerLog:
@@ -68,13 +68,13 @@ def single_rollout(
         )
 
         flat_state = state.board.flatten()
-        legal_mask = get_legal_moves(state, 0).flatten()
+        legal_mask = get_legal_moves(state, 0)
 
         logits = model(flat_state)
         # choose the action with the highest Q-value that is also legal
         q_net_action = jnp.argmax((logits + 1000) * legal_mask)
         # epsilon-greedy exploration
-        explore_action = random_move(state, 0, rng_key)[0]
+        explore_action = get_random_move_for_player(state, 0, rng_key)
 
         action = jax.lax.cond(
             jax.random.bernoulli(rng_key, epsilon),
@@ -84,17 +84,8 @@ def single_rollout(
         )
         action = jnp.asarray(action, dtype=jnp.int32)
 
-        # Split the scalar action into (row, col, direction) components.
-        action_split = jnp.array(
-            [
-                action // (config.board_width * 4),
-                (action % (config.board_width * 4)) // 4,
-                action % 4,
-            ]
-        )
-
         rng_key, subkey = jax.random.split(rng_key)
-        next_state, p1_reward = p1_step(state, subkey, config, action_split)
+        next_state, p1_reward = p1_step(state, subkey, config, action)
 
         new_cum_reward = cum_reward + p1_reward
 
