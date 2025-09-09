@@ -16,7 +16,7 @@ from tqdm import tqdm
 from src.rl.model import MLP
 from src.rts.config import EnvConfig
 from src.rts.env import init_state, is_done
-from src.rts.utils import get_legal_moves, p1_step, get_random_move_for_player
+from src.rts.utils import get_legal_moves, p1_step, sample_legal_action_flat
 
 
 class TimerLog:
@@ -72,9 +72,9 @@ def single_rollout(
 
         logits = model(flat_state)
         # choose the action with the highest Q-value that is also legal
-        q_net_action = jnp.argmax((logits + 1000) * legal_mask)
+        q_net_action = jnp.argmax(jnp.where(legal_mask, logits, -1e9))
         # epsilon-greedy exploration
-        explore_action = get_random_move_for_player(state, 0, rng_key)
+        explore_action = sample_legal_action_flat(rng_key, legal_mask)
 
         action = jax.lax.cond(
             jax.random.bernoulli(rng_key, epsilon),
