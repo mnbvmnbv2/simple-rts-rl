@@ -5,7 +5,8 @@ import distinctipy  # make sure to install via: pip install distinctipy
 
 from src.rts.config import EnvConfig
 from src.rts.env import init_state, move, reinforce_troops, EnvState, Board
-from src.rts.utils import assert_valid_state, get_legal_moves, fixed_argwhere
+from src.rts.utils import get_legal_moves, fixed_argwhere
+from tests.helpers import assert_valid_state
 
 # -------------------------------
 # Configuration for GUI and Board
@@ -24,7 +25,7 @@ EMPTY_COLOR = (255, 255, 255)
 
 def draw_board(screen, board: Board, selected_cell=None):
     """Draw the board grid, troop counts, and highlight the selected cell.
-    
+
     This version works for an arbitrary number of players (using board.player_troops
     with shape (num_players, height, width)) and generates distinct colors using distinctipy.
     """
@@ -34,7 +35,7 @@ def draw_board(screen, board: Board, selected_cell=None):
 
     # Number of players from the board shape
     num_players = board.player_troops.shape[0]
-    
+
     # Generate distinct colors for the agents.
     # distinctipy returns colors as floats in [0, 1]. Convert to 0-255 integer tuples.
     agent_colors_float = distinctipy.get_colors(num_players, rng=1)
@@ -43,7 +44,7 @@ def draw_board(screen, board: Board, selected_cell=None):
     # Function to darken a color (for base cells)
     def darken_color(color, factor=0.6):
         return tuple(max(0, int(c * factor)) for c in color)
-    
+
     agent_base_colors = [darken_color(color) for color in agent_colors]
 
     # Draw each cell.
@@ -78,7 +79,7 @@ def draw_board(screen, board: Board, selected_cell=None):
             # Draw the cell background and border.
             pygame.draw.rect(screen, color, rect)
             pygame.draw.rect(screen, GRID_COLOR, rect, 1)
-            
+
             # Render troop count text if nonzero.
             if troop_count:
                 text_surface = font.render(str(troop_count), True, TEXT_COLOR)
@@ -156,7 +157,9 @@ def main():
                     # Execute a move for player 0 (user-controlled) if an action is selected.
                     if action is not None:
                         sel_row, sel_col = selected_cell
-                        state = move(state, player=0, x=sel_col, y=sel_row, action=action)
+                        state = move(
+                            state, player=0, x=sel_col, y=sel_row, action=action
+                        )
 
                     # For every opponent (players 1 to n-1), perform a random move.
                     for agent in range(1, config.num_players):
@@ -168,7 +171,13 @@ def main():
                         rng_key, subkey = jax.random.split(rng_key)
                         action_idx = jax.random.randint(subkey, (), 0, num_actions)
                         action_random = jnp.take(legal_actions, action_idx, axis=0)
-                        state = move(state, agent, action_random[1], action_random[0], action_random[2])
+                        state = move(
+                            state,
+                            agent,
+                            action_random[1],
+                            action_random[0],
+                            action_random[2],
+                        )
 
                     # Reinforce troops for all players.
                     state = reinforce_troops(state, config)

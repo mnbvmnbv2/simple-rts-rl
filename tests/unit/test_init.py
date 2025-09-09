@@ -3,7 +3,7 @@ import jax.numpy as jnp
 import pytest
 from src.rts.config import EnvConfig
 from src.rts.env import init_state
-from src.rts.utils import assert_valid_state
+from tests.helpers import assert_valid_state
 
 
 # check for many EnvConfigs

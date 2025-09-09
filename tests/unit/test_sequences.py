@@ -1,8 +1,8 @@
 import jax
 
 from src.rts.env import init_state, move, reinforce_troops
-from src.rts.utils import assert_valid_state
 from src.rts.config import EnvConfig
+from tests.helpers import assert_valid_state
 
 
 def test_random_sequence_validity():
