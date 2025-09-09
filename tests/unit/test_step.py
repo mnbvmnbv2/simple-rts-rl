@@ -1,8 +1,9 @@
 import chex
 import jax.numpy as jnp
 import pytest
+
 from src.rts.config import EnvConfig
-from src.rts.env import Board, EnvState, reinforce_troops, move, is_done
+from src.rts.env import Board, EnvState, is_done, move, reinforce_troops
 from tests.helpers import assert_valid_state
 
 

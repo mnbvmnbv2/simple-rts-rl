@@ -1,8 +1,8 @@
-from flax import nnx
-import jax
-import jax.numpy as jnp
 from typing import Callable, Iterable
 
+import jax
+import jax.numpy as jnp
+from flax import nnx
 
 DType = jnp.dtype
 
@@ -84,6 +84,7 @@ class MLP(nnx.Module):
 
 if __name__ == "__main__":
     import time
+
     import jax
     import jax.numpy as jnp
     from flax import nnx

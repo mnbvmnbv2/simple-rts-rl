@@ -1,5 +1,6 @@
 import jax
 import pytest
+
 from src.rts.config import EnvConfig
 from src.rts.env import init_state
 

@@ -1,7 +1,7 @@
 import jax
 import jax.numpy as jnp
-from jax import lax
 from flax import nnx
+from jax import lax
 
 from src.rts.config import EnvConfig
 from src.rts.env import init_state

@@ -3,9 +3,9 @@ from functools import partial
 import jax
 import jax.numpy as jnp
 
-from src.rts.state import EnvState
 from src.rts.config import EnvConfig
 from src.rts.env import move, reinforce_troops, reward_function
+from src.rts.state import EnvState
 
 
 @jax.jit

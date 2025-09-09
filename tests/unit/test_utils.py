@@ -1,7 +1,7 @@
 import jax.numpy as jnp
 
 from src.rts.env import Board, EnvState
-from src.rts.utils import get_legal_moves, fixed_argwhere
+from src.rts.utils import fixed_argwhere, get_legal_moves
 
 
 # Helper function to create an EnvState from lists.

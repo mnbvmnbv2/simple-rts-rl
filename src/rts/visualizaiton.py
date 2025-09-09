@@ -1,8 +1,9 @@
-from typing import Sequence
 import math
-import numpy as np
-import matplotlib.pyplot as plt
+from typing import Sequence
+
 import distinctipy
+import matplotlib.pyplot as plt
+import numpy as np
 from IPython.display import clear_output
 
 from src.rts.env import EnvState

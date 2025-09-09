@@ -1,7 +1,7 @@
 import jax
 
-from src.rts.env import init_state, move, reinforce_troops
 from src.rts.config import EnvConfig
+from src.rts.env import init_state, move, reinforce_troops
 from tests.helpers import assert_valid_state
 
 

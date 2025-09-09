@@ -1,7 +1,8 @@
-import pytest
 import jax.numpy as jnp
-from src.rts.env import Board, EnvState, reward_function
+import pytest
+
 from src.rts.config import RewardConfig
+from src.rts.env import Board, EnvState, reward_function
 
 
 @pytest.fixture

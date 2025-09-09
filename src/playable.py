@@ -1,10 +1,10 @@
-import pygame
+import distinctipy  # make sure to install via: pip install distinctipy
 import jax
 import jax.numpy as jnp
-import distinctipy  # make sure to install via: pip install distinctipy
+import pygame
 
 from src.rts.config import EnvConfig
-from src.rts.env import init_state, move, reinforce_troops, EnvState, Board
+from src.rts.env import Board, EnvState, init_state, move, reinforce_troops
 from src.rts.utils import player_move
 from tests.helpers import assert_valid_state
 

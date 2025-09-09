@@ -1,7 +1,8 @@
 import jax
 import pytest
+
 from src.rts.config import EnvConfig
-from src.rts.env import EnvState, reinforce_troops, init_state, move
+from src.rts.env import EnvState, init_state, move, reinforce_troops
 
 
 @pytest.fixture

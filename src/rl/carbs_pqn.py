@@ -1,20 +1,22 @@
 import glob
-import re
-import os
 import logging
-import jax
-import numpy as np
-import mlflow
-from flax import nnx
-import optax
-from src.rl.model import MLP
-from src.rl.pqn import Params, train_minibatched
-from src.rl.eval import evaluate_batch
-from src.rts.config import EnvConfig, RewardConfig
-from carbs import CARBS, CARBSParams, ObservationInParam, Param
+import os
+import re
+
 import hydra
+import jax
+import mlflow
+import numpy as np
+import optax
+from carbs import CARBS, CARBSParams, ObservationInParam, Param
+from flax import nnx
 from hydra.utils import instantiate
 from omegaconf import DictConfig
+
+from src.rl.eval import evaluate_batch
+from src.rl.model import MLP
+from src.rl.pqn import Params, train_minibatched
+from src.rts.config import EnvConfig, RewardConfig
 
 
 @hydra.main(version_base=None, config_path="config", config_name="carbs_pqn")
