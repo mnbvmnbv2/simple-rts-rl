@@ -198,6 +198,18 @@ def reinforce_troops(
     return EnvState(board=new_board, time=time)
 
 
+@jax.jit
+def is_done(state: EnvState) -> bool:
+    """Check if the game is finished, when only one player has non-zero troops on the board."""
+    total_troops_per_player = jnp.sum(state.board.player_troops, axis=(1, 2))
+    active_players = total_troops_per_player > 0
+    num_active = jnp.sum(active_players)
+    return num_active == 1
+
+
+# ---------------- Reward function ----------------
+
+
 def _tile_changes(mask_cur, mask_nxt):
     cur = jnp.sum(mask_cur)
     nxt = jnp.sum(mask_nxt)
@@ -271,12 +283,3 @@ def reward_function(
     ).astype(jnp.float32)
 
     return reward
-
-
-@jax.jit
-def is_done(state: EnvState) -> bool:
-    """Check if the game is finished, when only one player has non-zero troops on the board."""
-    total_troops_per_player = jnp.sum(state.board.player_troops, axis=(1, 2))
-    active_players = total_troops_per_player > 0
-    num_active = jnp.sum(active_players)
-    return num_active == 1
