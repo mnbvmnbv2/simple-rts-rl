@@ -69,21 +69,6 @@ def player_move(carry, player):
 
 
 @partial(jax.jit, static_argnames=("config",))
-def random_step(
-    state: EnvState,
-    rng_key: jnp.ndarray,
-    config: EnvConfig,
-) -> EnvState:
-    (new_state, rng_key), _ = jax.lax.scan(
-        player_move, (state, rng_key), jnp.arange(config.num_players)
-    )
-
-    # After all players have moved, apply reinforcement.
-    new_state = reinforce_troops(new_state, config)
-    return new_state
-
-
-@partial(jax.jit, static_argnames=("config",))
 def p1_step(
     state: EnvState,
     rng_key: jnp.ndarray,
