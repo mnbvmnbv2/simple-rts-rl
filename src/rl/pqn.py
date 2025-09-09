@@ -1,20 +1,35 @@
 import functools
 import gc
+import time
+from collections import defaultdict
+from contextlib import contextmanager
 from dataclasses import dataclass
 
-from flax import nnx
-import optax
 import jax
 import jax.lax
 import jax.numpy as jnp
 import numpy as np
+import optax
+from flax import nnx
 from tqdm import tqdm
 
+from src.rl.model import MLP
 from src.rts.config import EnvConfig
 from src.rts.env import init_state, is_done
 from src.rts.utils import get_legal_moves, p1_step, random_move
-from src.rl.utils import TimerLog
-from src.rl.model import MLP
+
+
+class TimerLog:
+    def __init__(self):
+        self.store = defaultdict(list)
+
+    @contextmanager
+    def record(self, name: str):
+        t0 = time.perf_counter()
+        try:
+            yield
+        finally:
+            self.store[name].append(time.perf_counter() - t0)
 
 
 @dataclass(frozen=True)
