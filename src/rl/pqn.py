@@ -53,58 +53,82 @@ def single_rollout(
     num_steps: int,
     epsilon: float,
 ):
+    """
+    One ε-greedy rollout for player 0.
+    Returns:
+      obs_buffer         (T, obs_dim)
+      actions_buffer     (T,)
+      rewards_buffer     (T,)
+      done_buffer        (T,)
+      next_obs_buffer    (T, obs_dim)
+      next_legal_buffer  (T, num_actions)
+      cum_return         ()
+    """
     state = init_state(rng_key, config)
 
     def policy_step(carry, _):
         state, done, rng_key, cum_reward = carry
 
+        rng_key, k_reset, k_eps, k_explore, k_step = jax.random.split(rng_key, 5)
+
         # if done we init new state
-        rng_key, subkey = jax.random.split(rng_key)
         state: EnvState = jax.lax.cond(
-            done, lambda _: init_state(subkey, config), lambda _: state, operand=None
+            done, lambda _: init_state(k_reset, config), lambda _: state, operand=None
         )
 
-        flat_state = state.board.flatten()
-        legal_mask = get_legal_moves(state, 0)
+        # Current obs + legal mask
+        obs = state.board.flatten()
+        legal_mask = get_legal_moves(state, 0)  # (num_actions,)
 
-        logits = model(flat_state)
         # choose the action with the highest Q-value that is also legal
-        q_net_action = jnp.argmax(jnp.where(legal_mask, logits, -1e9))
+        q_vals = model(obs)  # (num_actions,)
+        neg_inf = jnp.array(-jnp.inf, dtype=q_vals.dtype)
+        q_masked = jnp.where(legal_mask, q_vals, neg_inf)
+        exploit_action = jnp.argmax(q_masked)
+
         # epsilon-greedy exploration
-        explore_action = sample_legal_action_flat(rng_key, legal_mask)
-
-        action = jax.lax.cond(
-            jax.random.bernoulli(rng_key, epsilon),
-            lambda _: explore_action,
-            lambda _: q_net_action,
-            operand=None,
+        explore_action = sample_legal_action_flat(k_explore, legal_mask)
+        action = jnp.where(
+            jax.random.bernoulli(k_eps, epsilon), explore_action, exploit_action
         )
-        action = jnp.asarray(action, dtype=jnp.int32)
+        action = action.astype(jnp.int32)
 
-        rng_key, subkey = jax.random.split(rng_key)
-        next_state, p1_reward = p1_step(state, subkey, config, action)
+        # env transition
+        next_state, reward = p1_step(state, k_step, config, action)
 
-        new_cum_reward = cum_reward + p1_reward
+        done_next = is_done(next_state)
+        next_obs = next_state.board.flatten()
+        next_legal_mask = get_legal_moves(next_state, 0)
 
-        done = is_done(next_state)
+        new_cum_reward = (cum_reward + reward).astype(jnp.float32)
+        reward = reward.astype(jnp.float32)
 
-        y = (state.board.flatten(), action, p1_reward, done, next_state.board.flatten())
-
-        return (next_state, done, rng_key, new_cum_reward), y
+        y = (obs, action, reward, done_next, next_obs, next_legal_mask)
+        return (next_state, done_next, rng_key, new_cum_reward), y
 
     (final_state, final_done, final_rng, cum_return), scan_out = jax.lax.scan(
         policy_step,
-        (state, jnp.array(False), rng_key, jnp.array(0.0)),
+        (state, jnp.array(False), rng_key, jnp.array(0.0, dtype=jnp.float32)),
         None,
         num_steps,
     )
-    obs_buffer, actions_buffer, rewards_buffer, done_buffer, next_obs_buffer = scan_out
+
+    (
+        obs_buffer,
+        actions_buffer,
+        rewards_buffer,
+        done_buffer,
+        next_obs_buffer,
+        next_legal_buffer,
+    ) = scan_out
+
     return (
         obs_buffer,
         actions_buffer,
         rewards_buffer,
         done_buffer,
         next_obs_buffer,
+        next_legal_buffer,
         cum_return,
     )
 
@@ -115,47 +139,57 @@ def q_lambda_return(
     rewards_buffer: jnp.ndarray,
     done_buffer: jnp.ndarray,
     next_obs_buffer: jnp.ndarray,
+    next_legal_buffer: jnp.ndarray,
     gamma: float,
     q_lambda: float,
 ) -> jnp.ndarray:
-    # Compute Q-values for the next observations via vectorized max.
-    # This returns an array of shape (num_steps,)
-    q_values = jax.vmap(lambda obs: jnp.max(q_net(obs), axis=-1))(next_obs_buffer)
+    """
+    Q(λ) targets with masked bootstrapping and hard guards against NaNs.
 
-    # For the final step, compute the return as:
-    # returns[-1] = rewards[-1] + gamma * q_value[-1] * (1 - done[-1])
-    returns_last = rewards_buffer[-1] + gamma * q_values[-1] * (1.0 - done_buffer[-1])
+    Recurrence with terminal step T-1:
+      V_t      = max_a Q(next_obs_t, a) over legal a, else 0
+      V_t      = 0 if done_t
+      R_{T-1}  = r_{T-1} + gamma * V_{T-1}
+      R_t      = r_t + gamma * ( q_lambda * R_{t+1} + (1 - q_lambda) * V_t )
+    """
+    rewards = rewards_buffer.astype(jnp.float32)  # (T,)
+    done_f = done_buffer.astype(jnp.float32)  # (T,)
+    not_done = 1.0 - done_f  # (T,)
 
-    # For timesteps 0,...,num_steps-2 we use:
-    # returns[t] = rewards[t] + gamma * (q_lambda * returns[t+1] +
-    #                                    (1 - q_lambda) * q_value[t+1] * (1 - done[t+1]))
-    # To compute this in reverse, we reverse the arrays (excluding the last step).
-    rewards_rev = rewards_buffer[:-1][::-1]
-    dones_rev = done_buffer[1:][::-1]
-    next_vals_rev = q_values[1:][::-1]
+    def masked_qmax(ob, legal_mask):
+        q = q_net(ob)  # (A,)
+        # Ensure same dtype for filler
+        neg_inf = jnp.array(-jnp.inf, dtype=q.dtype)
+        q_masked = jnp.where(legal_mask, q, neg_inf)  # illegal → -inf
+        qmax = jnp.max(q_masked, axis=-1)  # may be -inf if none legal
+        any_legal = jnp.any(legal_mask)
+        # If no legal actions, define value 0.0 to avoid -inf
+        qmax = jnp.where(any_legal, qmax, jnp.array(0.0, dtype=q.dtype))
+        return qmax.astype(jnp.float32)
 
-    def scan_fn(next_return, inputs):
-        reward, done, next_value = inputs
-        nextnonterminal = 1.0 - done
-        current_return = reward + gamma * (
-            q_lambda * next_return + (1 - q_lambda) * next_value * nextnonterminal
-        )
-        return current_return, current_return
+    # Compute bootstrap values and drop them to 0 when done
+    v_next = jax.vmap(masked_qmax)(next_obs_buffer, next_legal_buffer)  # (T,)
+    v_next = jnp.where(not_done > 0.0, v_next, 0.0)  # (T,)
 
-    # The scan will traverse the reversed sequences.
-    # Its initial carry is the last return (for t = num_steps - 1)
-    _, returns_rev_scan = jax.lax.scan(
-        scan_fn, returns_last, (rewards_rev, dones_rev, next_vals_rev)
-    )
+    # Terminal step
+    last = rewards[-1] + gamma * v_next[-1]  # both float32, safe
 
-    # Flip the scanned returns back to the original order.
-    returns_first_part = returns_rev_scan[::-1]
-    # Append the final return computed above.
-    full_returns = jnp.concatenate(
-        [returns_first_part, jnp.array([returns_last])], axis=0
-    )
+    # Reverse-scan for t = T-2..0
+    rew_rev = rewards[:-1][::-1]
+    v_rev = v_next[:-1][::-1]
 
-    return full_returns
+    def scan_fn(R_next, inputs):
+        r_t, v_t = inputs
+        boot = q_lambda * R_next + (1.0 - q_lambda) * v_t
+        R_t = r_t + gamma * boot
+        return R_t, R_t
+
+    _, R_rev = jax.lax.scan(scan_fn, last, (rew_rev, v_rev))
+    R_fwd = R_rev[::-1]
+    targets = jnp.concatenate([R_fwd, jnp.array([last], dtype=jnp.float32)], axis=0)
+    # Final safety: replace any residual NaNs/Infs (shouldn't happen with guards above)
+    targets = jnp.nan_to_num(targets, nan=0.0, posinf=0.0, neginf=0.0)
+    return targets  # (T,)
 
 
 @nnx.jit
@@ -177,7 +211,9 @@ def train_step(
 
 
 vmapped_rollout = jax.vmap(single_rollout, in_axes=(0, None, None, None, None))
-vmapped_q_lambda_return = jax.vmap(q_lambda_return, in_axes=(None, 0, 0, 0, None, None))
+vmapped_q_lambda_return = jax.vmap(
+    q_lambda_return, in_axes=(None, 0, 0, 0, 0, None, None)
+)
 
 
 def train_minibatched(
@@ -207,6 +243,7 @@ def train_minibatched(
                 rewards_buffer,
                 done_buffer,
                 next_obs_buffer,
+                next_legal_buffer,
                 cum_return,
             ) = rollout
 
@@ -219,6 +256,7 @@ def train_minibatched(
                 rewards_buffer,
                 done_buffer,
                 next_obs_buffer,
+                next_legal_buffer,
                 params.gamma,
                 params.q_lambda,
             )
