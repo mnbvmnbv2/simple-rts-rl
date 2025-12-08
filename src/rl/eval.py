@@ -6,6 +6,7 @@ from jax import lax
 from src.rts.config import EnvConfig
 from src.rts.env import init_state
 from src.rts.utils import get_legal_moves, p1_step
+from src.rts.state import get_cnn_observation
 
 
 def evaluate_batch(
@@ -20,7 +21,8 @@ def evaluate_batch(
 
     def step_fn(states, step_key):
         legal_mask = jax.vmap(lambda s: get_legal_moves(s, 0))(states)
-        boards_flat = jax.vmap(lambda s: s.board.flatten())(states)
+        # boards_flat = jax.vmap(lambda s: s.board.flatten())(states)
+        boards_flat = jax.vmap(lambda s: get_cnn_observation(s, 0))(states)
         q_vals = jax.vmap(q_net)(boards_flat)
         actions = jnp.argmax(jnp.where(legal_mask, q_vals, -1e9), axis=1)
 

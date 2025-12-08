@@ -82,6 +82,39 @@ class MLP(nnx.Module):
         return out
 
 
+class CNN(nnx.Module):
+    def __init__(self, in_channels: int, action_space: int, rngs: nnx.Rngs):
+        # 1. Convolutional feature extractor
+        self.conv1 = nnx.Conv(
+            in_channels, 32, kernel_size=(3, 3), padding="SAME", rngs=rngs
+        )
+        self.conv2 = nnx.Conv(32, 64, kernel_size=(3, 3), padding="SAME", rngs=rngs)
+        self.conv3 = nnx.Conv(64, 64, kernel_size=(3, 3), padding="SAME", rngs=rngs)
+
+        # 2. Flatten
+        self.linear1 = nnx.Linear(64 * 10 * 10, 512, rngs=rngs)  # Assuming 10x10 board
+        self.linear_out = nnx.Linear(512, action_space, rngs=rngs)
+
+        self.relu = nnx.relu
+
+    def __call__(self, x):
+        # x shape: (height, width, channels)
+        x = self.relu(self.conv1(x))
+        x = self.relu(self.conv2(x))
+        x = self.relu(self.conv3(x))
+
+        # Flatten
+        if x.ndim == 3:
+            # Case 1: Unbatched (inside vmap) -> (H, W, C)
+            x = x.reshape((-1,))  # Flatten everything -> (H*W*C,)
+        else:
+            # Case 2: Batched (training) -> (B, H, W, C)
+            x = x.reshape((x.shape[0], -1))
+        x = self.relu(self.linear1(x))
+        x = self.linear_out(x)
+        return x
+
+
 if __name__ == "__main__":
     import time
 

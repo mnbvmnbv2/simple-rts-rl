@@ -17,6 +17,7 @@ from src.rl.model import MLP
 from src.rts.config import EnvConfig
 from src.rts.env import EnvState, init_state, is_done
 from src.rts.utils import get_legal_moves, p1_step, sample_legal_action_flat
+from src.rts.state import get_cnn_observation
 
 
 class TimerLog:
@@ -77,7 +78,8 @@ def single_rollout(
         )
 
         # Current obs + legal mask
-        obs = state.board.flatten()
+        # obs = state.board.flatten()
+        obs = get_cnn_observation(state, 0)
         legal_mask = get_legal_moves(state, 0)  # (num_actions,)
 
         # choose the action with the highest Q-value that is also legal
@@ -97,7 +99,8 @@ def single_rollout(
         next_state, reward = p1_step(state, k_step, config, action)
 
         done_next = is_done(next_state)
-        next_obs = next_state.board.flatten()
+        # next_obs = next_state.board.flatten()
+        next_obs = get_cnn_observation(next_state, 0)
         next_legal_mask = get_legal_moves(next_state, 0)
 
         new_cum_reward = (cum_reward + reward).astype(jnp.float32)
@@ -262,7 +265,8 @@ def train_minibatched(
             )
 
         with timer.record("reshape"):
-            flat_observations = obs_buffer.reshape(-1, obs_buffer.shape[-1])
+            # flat_observations = obs_buffer.reshape(-1, obs_buffer.shape[-1])
+            flat_observations = obs_buffer.reshape(-1, *obs_buffer.shape[2:])
             flat_actions = actions_buffer.reshape(-1)
             flat_returns = returns.reshape(-1)
             num_samples = flat_observations.shape[0]
