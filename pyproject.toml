@@ -6,9 +6,9 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "chex>=0.1.89",
-    "flax>=0.10.3",
+    "flax>=0.12.2",
     "furo>=2024.8.6",
-    "jax[cuda12]>=0.5.1",
+    "jax[cuda13]>=0.8.2",
     "jupyterlab>=4.3.5",
     "matplotlib>=3.10.0",
     "myst-parser>=4.0.1",
