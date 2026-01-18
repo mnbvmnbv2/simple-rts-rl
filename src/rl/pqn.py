@@ -209,7 +209,7 @@ def train_step(
         return jnp.mean((acted_q - returns) ** 2)
 
     loss, grads = nnx.value_and_grad(loss_fn)(q_net)
-    optimizer.update(grads)
+    optimizer.update(q_net, grads)
     return q_net, optimizer, loss
 
 
